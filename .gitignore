@@ -48,8 +48,6 @@ wheels/
 *.egg
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -107,3 +105,27 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Configuration files
+src/config-dev.yaml
+src/config-prod.yaml
+# src/config.yaml
+
+# Database files
+src/*.db
+src/*.sqlite3
+
+# Output directories
+src/output/
+src/dev_output/
+src/test_output/
+
+# Log directories
+src/logs/
+src/dev_logs/
+src/test_logs/
+
+# Input directories
+src/input/
+src/dev_input/
+src/test_input/

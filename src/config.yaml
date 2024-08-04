@@ -1,0 +1,37 @@
+# config.yaml
+
+# API Endpoints
+api:
+  claude_ai: "https://api.anthropic.com/v1/messages"
+  black_forest_ai: "https://api.replicate.com/v1/predictions"
+  elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
+  luma_ai: "https://api.lumalabs.ai/v1/images/generations"
+  suna_ai: "https://api.suno.ai/v1/generations"
+
+# Default Content Generation Parameters
+content_generation:
+  scene_amount: 10
+  image_style: "Photorealistic, Cinematic"
+  image_details: "--ar 9:16 --style raw --s 200 --v 6"
+  title_details: "--ar 9:16 --style raw --s 40 --v 6"
+  video_length: 60  # in seconds
+
+# File Paths
+paths:
+  input_directory: "input/"
+  output_directory: "output/"
+  logs_directory: "logs/"
+
+# Logging Settings
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/app.log"
+
+# Database Settings
+database:
+  url: "sqlite:///content_creation.db"
+
+# Feature Flags
+features:
+  use_mock_llm: false

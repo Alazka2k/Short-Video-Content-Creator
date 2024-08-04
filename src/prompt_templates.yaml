@@ -1,0 +1,32 @@
+# src/prompt_templates.yaml
+
+video_content:
+  template: |
+    Create a short video content about $name with the following specifications:
+    - Number of scenes: $scene_amount
+    - Video length: $video_length seconds
+    - Style: $image_style
+
+    Please structure your response as follows:
+    1. Video Title: A catchy, informative title for the video.
+    2. Description: A brief overview of the video content (2-3 sentences).
+    3. Main Scenes: Provide $scene_amount scenes, each with:
+       - Scene description: A brief description of what happens in the scene.
+       - Visual prompt: A detailed description for image generation.
+
+    Remember to keep the content engaging, factual, and suitable for the target audience (ages 18-50).
+
+scene_audio_script:
+  template: |
+    Create an audio script for the following scene about $name:
+    
+    Scene description: $scene_description
+    
+    The script should be approximately $audio_length seconds when read aloud.
+    
+    Include:
+    1. Clear and concise narration of the scene
+    2. Any relevant facts or information about $name related to this scene
+    3. Engaging language suitable for a video narration
+    
+    The tone should be $tone and the language should be suitable for $audience.
