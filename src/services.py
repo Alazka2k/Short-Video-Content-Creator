@@ -1,29 +1,17 @@
-# services.py
+# src/services.py
+
 import os
 import logging
 from anthropic import Anthropic
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 class LLMClient:
     def __init__(self):
-        self.client = Anthropic()
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            print("Warning: ANTHROPIC_API_KEY not found in environment variables")
+            api_key = input("Please enter your Anthropic API key: ").strip()
+        self.client = Anthropic(api_key=api_key)
         self.model = "claude-3-5-sonnet-20240620"
-
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def generate_content(self, prompt):
-        """Generate content using the Claude API with retry mechanism."""
-        try:
-            logging.info(f"Sending request to Claude API with prompt: {prompt}")
-            response = self.client.completions.create(
-                model=self.model,
-                max_tokens_to_sample=1000,
-                prompt=f"Human: {prompt}\n\nAssistant:",
-            )
-            logging.info(f"Received response from Claude API")
-            return response.completion
-        except Exception as e:
-            logging.error(f"API request failed: {e}")
-            raise  # Re-raise the exception to trigger a retry
 
 class MockLLMClient:
     def generate_content(self, prompt):
@@ -36,6 +24,6 @@ class MockLLMClient:
         else:
             return f"This is a generic mock response for the prompt: {prompt}"
 
-# Choose which client to use
+# Use environment variable to determine whether to use mock or real client
 use_mock = os.environ.get('USE_MOCK_LLM', 'false').lower() == 'true'
 llm_client = MockLLMClient() if use_mock else LLMClient()
