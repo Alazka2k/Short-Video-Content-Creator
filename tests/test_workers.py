@@ -1,72 +1,37 @@
-# tests/test_workers.py
-
 import unittest
 from unittest.mock import patch, MagicMock
-from src.workers import content_creation_worker
+import os
+import sys
 
-class TestContentCreationWorker(unittest.TestCase):
-    @patch('src.workers.llm_client')
-    @patch('src.workers.save_to_database')
-    def test_content_creation_worker_success(self, mock_save_to_database, mock_llm_client):
-        # Mock successful LLM response
-        mock_llm_client.generate_content.return_value = """
-        1. Video Title: The Extraordinary Life of Albert Einstein
-        2. Description: Dive into the fascinating journey of the world's most famous physicist.
-        3. Hashtags: #AlbertEinstein, #ScienceGenius, #Relativity
-        4. Opening Scene: A young Albert gazes at a compass, sparking his curiosity.
-        5. Main Scenes:
-           1. Einstein as a patent clerk, scribbling equations.
-           2. The publication of his groundbreaking papers in 1905.
-           3. Einstein receiving the Nobel Prize in Physics.
-        6. Closing Scene: Einstein's impact on modern physics and pop culture.
-        7. Visual Prompts:
-           - Opening: Close-up of a child's hand holding a compass, soft lighting.
-           - Scene 1: Cluttered desk with papers, dim office lighting.
-           - Scene 2: Montage of scientific journals with Einstein's papers.
-           - Scene 3: Grand hall with Einstein receiving the Nobel Prize.
-           - Closing: Split screen of atomic structure and Einstein merchandise.
-        """
+# Add the src directory to the Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(os.path.dirname(current_dir), 'src')
+sys.path.insert(0, src_dir)
 
-        initial_prompt = "Create a video script"
-        run_parameters = {"scene_amount": 3, "video_length": 60, "image_style": "Realistic"}
-        variable_inputs = {"name": "Albert Einstein"}
+from workers import PromptGenerator, content_creation_worker
 
-        result = content_creation_worker(initial_prompt, run_parameters, variable_inputs)
+class TestWorkers(unittest.TestCase):
+    def setUp(self):
+        self.prompt_generator = PromptGenerator()
 
-        self.assertEqual(result['title'], "The Extraordinary Life of Albert Einstein")
-        self.assertIn("fascinating journey", result['description'])
-        self.assertIn("#AlbertEinstein", result['hashtags'])
-        self.assertIn("young Albert gazes at a compass", result['opening_scene'])
-        self.assertEqual(len(result['main_scenes']), 3)
-        self.assertIn("impact on modern physics", result['closing_scene'])
+    def test_generate_prompt(self):
+        prompt = self.prompt_generator.generate_prompt("basic", {"name": "Test Name", "scene_amount": 5})
+        self.assertIn("Test Name", prompt)
+        self.assertIn("5 scenes", prompt)
 
-    @patch('src.workers.llm_client')
-    def test_content_creation_worker_failure(self, mock_llm_client):
-        # Mock LLM failure
-        mock_llm_client.generate_content.return_value = None
+    @patch('workers.generate_content_with_openai')
+    @patch('workers.process_generated_content')
+    @patch('workers.save_to_database')
+    def test_content_creation_worker(self, mock_save, mock_process, mock_generate):
+        mock_generate.return_value = "Generated content"
+        mock_process.return_value = {"title": "Test Title", "description": "Test Description"}
 
-        initial_prompt = "Create a video script"
-        run_parameters = {"scene_amount": 3, "video_length": 60, "image_style": "Realistic"}
-        variable_inputs = {"name": "Albert Einstein"}
+        result = content_creation_worker("basic", {"scene_amount": 5}, {"name": "Test Name"})
 
-        result = content_creation_worker(initial_prompt, run_parameters, variable_inputs)
-
-        self.assertIn("error", result)
-        self.assertIn("Failed to generate content", result["error"])
-
-    @patch('src.workers.llm_client')
-    def test_content_creation_worker_empty_response(self, mock_llm_client):
-        # Mock LLM empty response
-        mock_llm_client.generate_content.return_value = ""
-
-        initial_prompt = "Create a video script"
-        run_parameters = {"scene_amount": 3, "video_length": 60, "image_style": "Realistic"}
-        variable_inputs = {"name": "Albert Einstein"}
-
-        result = content_creation_worker(initial_prompt, run_parameters, variable_inputs)
-
-        self.assertIn("error", result)
-        self.assertIn("Failed to generate content", result["error"])
+        self.assertEqual(result, {"title": "Test Title", "description": "Test Description"})
+        mock_generate.assert_called_once()
+        mock_process.assert_called_once_with("Generated content", {"scene_amount": 5})
+        mock_save.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

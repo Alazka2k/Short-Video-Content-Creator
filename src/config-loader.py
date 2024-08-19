@@ -40,7 +40,7 @@ def load_config():
 
     # Add API keys from .env
     config['api_keys'] = {
-        'anthropic': os.getenv('ANTHROPIC_API_KEY'),
+        'openai': os.getenv('OPENAI_API_KEY'),
         'black_forest': os.getenv('BLACK_FOREST_API_KEY'),
         'elevenlabs': os.getenv('ELEVENLABS_API_KEY'),
         'luma': os.getenv('LUMA_API_KEY'),

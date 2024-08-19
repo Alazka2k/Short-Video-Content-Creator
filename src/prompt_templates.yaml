@@ -2,6 +2,7 @@
 
 video_content:
   template: |
+    {component:greeting}
     Create a short video content about $name with the following specifications:
     - Number of scenes: $scene_amount
     - Video length: $video_length seconds
@@ -15,9 +16,12 @@ video_content:
        - Visual prompt: A detailed description for image generation.
 
     Remember to keep the content engaging, factual, and suitable for the target audience (ages 18-50).
+    {component:closing}
+  max_length: 2000
 
 scene_audio_script:
   template: |
+    {component:greeting}
     Create an audio script for the following scene about $name:
     
     Scene description: $scene_description
@@ -30,3 +34,16 @@ scene_audio_script:
     3. Engaging language suitable for a video narration
     
     The tone should be $tone and the language should be suitable for $audience.
+    {component:closing}
+  max_length: 1500
+
+image_generation:
+  template: |
+    Create a detailed visual description for an image of $name with the following specifications:
+    - Style: $image_style
+    - Scene: $scene_description
+    - Key elements to include: $key_elements
+
+    The description should be suitable for an AI image generation tool.
+    Focus on visual details, composition, lighting, and atmosphere.
+  max_length: 1000

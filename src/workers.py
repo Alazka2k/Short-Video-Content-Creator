@@ -1,98 +1,93 @@
-# src/workers.py
-
-from src.prompt_generator import PromptGenerator
-from src.services import llm_client
-from src.models import db, Content
 import logging
+from flask import current_app
+from models import db, Content
+from services import generate_content_with_openai
+from typing import Dict, Any
+import os
+from dotenv import load_dotenv
 
-prompt_generator = PromptGenerator('src/prompt_templates.yaml')
+# Load environment variables
+load_dotenv()
 
-def content_creation_worker(initial_prompt, run_parameters, variable_inputs):
-    logging.info(f"Starting content creation for {variable_inputs['name']}")
+class PromptGenerator:
+    def __init__(self):
+        self.templates = {
+            "basic": "Create a short video script about {name}. The video should have {scene_amount} scenes.",
+            "detailed": "Create a detailed video script about {name}. The video should have {scene_amount} scenes. "
+                        "Include information about their background, achievements, and legacy. "
+                        "Each scene should be vivid and engaging.",
+            "educational": "Create an educational video script about {name} suitable for {target_audience}. "
+                           "The video should have {scene_amount} scenes and focus on key facts and interesting details.",
+        }
+
+    def generate_prompt(self, template_name: str, variables: Dict[str, Any]) -> str:
+        if template_name not in self.templates:
+            raise ValueError(f"Unknown template: {template_name}")
+        
+        template = self.templates[template_name]
+        return template.format(**variables)
+
+    def add_template(self, name: str, template: str):
+        self.templates[name] = template
+
+prompt_generator = PromptGenerator()
+
+def content_creation_worker(template_name: str, run_parameters: Dict[str, Any], variable_inputs: Dict[str, Any], app=None):
+    logging.info(f"Starting content creation for {variable_inputs['name']} using template: {template_name}")
     
     try:
-        # Generate the full prompt using the PromptGenerator
-        full_prompt = prompt_generator.generate_prompt('video_content', {
-            'name': variable_inputs['name'],
-            'scene_amount': run_parameters['scene_amount'],
-            'video_length': run_parameters['video_length'],
-            'image_style': run_parameters['image_style']
-        })
+        # Generate the prompt
+        full_prompt = prompt_generator.generate_prompt(template_name, {**run_parameters, **variable_inputs})
         
-        # Validate the generated prompt
-        if not prompt_generator.validate_prompt(full_prompt):
-            raise ValueError("Generated prompt is invalid")
-        
-        # Generate content using the LLM
-        generated_content = llm_client.generate_content(full_prompt)
-        
-        if not generated_content:
-            raise ValueError("Generated content is empty")
+        # Generate content using OpenAI API
+        generated_content = generate_content_with_openai(full_prompt)
         
         # Process the generated content
-        processed_content = process_generated_content(generated_content)
-        
-        # Generate audio scripts for each scene
-        processed_content = generate_audio_scripts(processed_content, variable_inputs['name'])
+        processed_content = process_generated_content(generated_content, run_parameters)
         
         # Save to database
-        save_to_database(processed_content, variable_inputs['name'])
+        if app:
+            with app.app_context():
+                save_to_database(processed_content, variable_inputs['name'])
+        else:
+            save_to_database(processed_content, variable_inputs['name'])
         
         return processed_content
     except Exception as e:
         logging.error(f"Error in content creation: {str(e)}")
         return {"error": f"Failed to generate content: {str(e)}"}
 
-def process_generated_content(generated_content):
-    lines = generated_content.strip().split('\n')
+def process_generated_content(generated_content: str, run_parameters: Dict[str, Any]) -> Dict[str, Any]:
+    # Process the OpenAI's output based on run parameters
+    # This is a placeholder implementation. Adjust according to your specific needs.
+    scenes = generated_content.split('\n')
     processed_content = {
-        'title': '',
-        'description': '',
-        'scenes': []
+        'title': scenes[0] if scenes else '',
+        'description': scenes[1] if len(scenes) > 1 else '',
+        'hashtags': scenes[2] if len(scenes) > 2 else '',
+        'opening_scene': scenes[3] if len(scenes) > 3 else '',
+        'main_scenes': scenes[4:-1] if len(scenes) > 5 else [],
+        'closing_scene': scenes[-1] if scenes else ''
     }
-
-    current_section = None
-    for line in lines:
-        line = line.strip()
-        if line.startswith('1. Video Title:'):
-            processed_content['title'] = line.split(':', 1)[1].strip()
-        elif line.startswith('2. Description:'):
-            processed_content['description'] = line.split(':', 1)[1].strip()
-        elif line.startswith('3. Main Scenes:'):
-            current_section = 'scenes'
-        elif current_section == 'scenes' and line.startswith('-'):
-            scene_type, scene_content = line.split(':', 1)
-            if 'Scene description' in scene_type:
-                processed_content['scenes'].append({'description': scene_content.strip(), 'visual_prompt': ''})
-            elif 'Visual prompt' in scene_type and processed_content['scenes']:
-                processed_content['scenes'][-1]['visual_prompt'] = scene_content.strip()
-
+    logging.info(f"Processed content: {processed_content}")
     return processed_content
 
-def generate_audio_scripts(processed_content, name):
-    for i, scene in enumerate(processed_content['scenes']):
-        audio_prompt = prompt_generator.generate_prompt('scene_audio_script', {
-            'name': name,
-            'scene_description': scene['description'],
-            'audio_length': 15,  # Assume 15 seconds per scene, adjust as needed
-            'tone': 'Informative',
-            'audience': 'General public'
-        })
-        
-        # Generate audio script using the LLM
-        audio_script = llm_client.generate_content(audio_prompt)
-        
-        # Add the audio script to the scene
-        scene['audio_script'] = audio_script
+def save_to_database(processed_content: Dict[str, Any], name: str):
+    try:
+        content = Content(
+            name=name,
+            title=processed_content['title'],
+            description=processed_content['description'],
+            content=str(processed_content)  # Convert dict to string for storage
+        )
+        db.session.add(content)
+        db.session.commit()
+        logging.info(f"Saved content to database for {name}")
+    except Exception as e:
+        logging.error(f"Error saving to database: {str(e)}")
+        raise
 
-    return processed_content
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def save_to_database(processed_content, name):
-    content = Content(
-        name=name,
-        title=processed_content['title'],
-        description=processed_content['description'],
-        content=str(processed_content)
-    )
-    db.session.add(content)
-    db.session.commit()
+# You might want to add any additional setup or initialization code here

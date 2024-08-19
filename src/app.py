@@ -1,36 +1,40 @@
-# src/app.py
-
 from flask import Flask, request, jsonify
-from src.models import db
-from src.workers import content_creation_worker
+from models import db
+from workers import content_creation_worker
 
-def create_app():
+def create_app(config_name=None):
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///content_creation.db'
+    
+    if config_name == 'testing':
+        app.config['TESTING'] = True
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///content_creation.db'
+    
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
 
     @app.route('/create_content', methods=['POST'])
     def create_content():
         data = request.json
-        if not all(key in data for key in ['initial_prompt', 'run_parameters', 'variable_inputs']):
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        template_name = data.get('template_name')
+        run_parameters = data.get('run_parameters', {})
+        variable_inputs = data.get('variable_inputs', {})
+
+        if not all([template_name, run_parameters, variable_inputs]):
             return jsonify({'error': 'Missing required fields'}), 400
 
-        result = content_creation_worker(data['initial_prompt'], data['run_parameters'], data['variable_inputs'])
-        if 'error' in result:
-            return jsonify(result), 500
-        return jsonify(result), 200
-
-    @app.route('/get_content/<name>', methods=['GET'])
-    def get_content(name):
-        from src.models import Content
-        content = Content.query.filter_by(name=name).first()
-        if content:
-            return jsonify({
-                'name': content.name,
-                'title': content.title,
-                'description': content.description,
-                'content': eval(content.content)
-            }), 200
-        return jsonify({'error': 'Content not found'}), 404
+        result = content_creation_worker(template_name, run_parameters, variable_inputs)
+        return jsonify(result)
 
     return app
+
+# This part is optional, but can be useful for running the app directly
+if __name__ == '__main__':
+    app = create_app()
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)

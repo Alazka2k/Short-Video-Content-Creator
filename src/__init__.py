@@ -1,14 +1,6 @@
-# src/__init__.py
-
-from .models import db, Content
-from .services import LLMClient, MockLLMClient
-from .workers import content_creation_worker
 from .app import create_app
+from .workers import content_creation_worker, PromptGenerator
+from .services import generate_content_with_openai
+from .models import db, Content
 
-__all__ = [
-    'create_app',
-    'Content',
-    'LLMClient',
-    'MockLLMClient',
-    'content_creation_worker',
-]
+# You can add any other necessary imports or initialization code here

@@ -1,45 +1,22 @@
-# tests/test_services.py
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
 
-import unittest
-from unittest.mock import patch, MagicMock
-from src.services import LLMClient, MockLLMClient
+load_dotenv()
 
-class TestLLMClient(unittest.TestCase):
-    @patch('src.services.Anthropic')
-    def test_llm_client_initialization(self, mock_anthropic):
-        client = LLMClient()
-        self.assertIsNotNone(client.client)
-        self.assertEqual(client.model, "claude-3-5-sonnet-20240620")
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-    @patch('src.services.Anthropic')
-    def test_generate_content_success(self, mock_anthropic):
-        mock_message = MagicMock()
-        mock_message.content = [MagicMock(text="Generated content")]
-        mock_anthropic.return_value.messages.create.return_value = mock_message
-
-        client = LLMClient()
-        result = client.generate_content("Test prompt")
-        self.assertEqual(result, "Generated content")
-
-    @patch('src.services.Anthropic')
-    def test_generate_content_failure(self, mock_anthropic):
-        mock_anthropic.return_value.messages.create.side_effect = Exception("API error")
-
-        client = LLMClient()
-        with self.assertRaises(Exception):
-            client.generate_content("Test prompt")
-
-class TestMockLLMClient(unittest.TestCase):
-    def test_mock_generate_content(self):
-        client = MockLLMClient()
-        result = client.generate_content("Tell me about audio script")
-        self.assertIn("mock audio script", result)
-
-        result = client.generate_content("Describe a scene")
-        self.assertIn("Imagine a scene", result)
-
-        result = client.generate_content("Generic prompt")
-        self.assertIn("generic mock response", result)
-
-if __name__ == '__main__':
-    unittest.main()
+def generate_content_with_openai(prompt: str) -> str:
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a creative content generator for short videos."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Error in OpenAI API call: {str(e)}")
+        raise

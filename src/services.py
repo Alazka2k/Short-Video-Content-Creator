@@ -1,29 +1,31 @@
-# src/services.py
-
+from openai import OpenAI
 import os
+from dotenv import load_dotenv
 import logging
-from anthropic import Anthropic
 
-class LLMClient:
-    def __init__(self):
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            print("Warning: ANTHROPIC_API_KEY not found in environment variables")
-            api_key = input("Please enter your Anthropic API key: ").strip()
-        self.client = Anthropic(api_key=api_key)
-        self.model = "claude-3-5-sonnet-20240620"
+# Load environment variables
+load_dotenv()
 
-class MockLLMClient:
-    def generate_content(self, prompt):
-        logging.info(f"Mock generating content for prompt: {prompt}")
-        
-        if "audio script" in prompt.lower():
-            return f"This is a mock audio script about {prompt.split('about ')[-1]}. It contains fascinating facts and an engaging narrative."
-        elif "scene" in prompt.lower():
-            return f"Imagine a scene related to {prompt.split('to ')[-1]}. It's visually striking and emotionally evocative."
-        else:
-            return f"This is a generic mock response for the prompt: {prompt}"
+# Initialize OpenAI client
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-# Use environment variable to determine whether to use mock or real client
-use_mock = os.environ.get('USE_MOCK_LLM', 'false').lower() == 'true'
-llm_client = MockLLMClient() if use_mock else LLMClient()
+def generate_content_with_openai(prompt: str) -> str:
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",  # Make sure this model name is correct
+            messages=[
+                {"role": "system", "content": "You are a creative content generator for short videos."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000  # Adjust as needed
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logging.error(f"Error in OpenAI API call: {str(e)}")
+        raise
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Ensure the function is available when imported
+__all__ = ['generate_content_with_openai']
