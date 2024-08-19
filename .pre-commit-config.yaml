@@ -1,0 +1,9 @@
+repos:
+-   repo: local
+    hooks:
+    -   id: python-tests
+        name: Python Tests
+        entry: python -m unittest discover tests
+        language: system
+        types: [python]
+        pass_filenames: false
