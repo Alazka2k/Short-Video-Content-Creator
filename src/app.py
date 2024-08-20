@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
-from models import db
+from models import db, Content
 from workers import content_creation_worker
+from typing import List, Dict, Any
 
 def create_app(config_name=None):
     app = Flask(__name__)
@@ -14,21 +15,45 @@ def create_app(config_name=None):
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
 
-    @app.route('/create_content', methods=['POST'])
+    @app.route('/api/create-content', methods=['POST'])
     def create_content():
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
 
-        template_name = data.get('template_name')
-        run_parameters = data.get('run_parameters', {})
-        variable_inputs = data.get('variable_inputs', {})
-
-        if not all([template_name, run_parameters, variable_inputs]):
+        required_fields = ['title', 'description', 'targetAudience', 'duration', 'style', 'services']
+        if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), 400
 
-        result = content_creation_worker(template_name, run_parameters, variable_inputs)
-        return jsonify(result)
+        try:
+            content = Content(
+                title=data['title'],
+                description=data['description'],
+                target_audience=data['targetAudience'],
+                duration=data['duration'],
+                style=data['style'],
+                services=str(data['services'])
+            )
+            db.session.add(content)
+            db.session.commit()
+
+            result = content_creation_worker(content.id, data['services'])
+            return jsonify(result), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/get-content', methods=['GET'])
+    def get_content():
+        try:
+            contents = Content.query.order_by(Content.created_at.desc()).all()
+            return jsonify([content.to_dict() for content in contents]), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        return jsonify({'status': 'healthy'}), 200
 
     return app
 

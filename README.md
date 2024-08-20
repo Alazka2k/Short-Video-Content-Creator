@@ -6,7 +6,7 @@ The Short Video Content Creator is an automated system that generates engaging s
 
 ## Current Status
 
-As of August 19, 2024, the project has achieved the following milestones:
+As of August 20, 2024, the project has achieved the following milestones:
 
 - Implemented core content generation functionality using OpenAI's GPT model
 - Developed a robust testing framework with unit tests covering key components
@@ -15,6 +15,8 @@ As of August 19, 2024, the project has achieved the following milestones:
 - Added configuration management with separate dev and prod config files
 - Implemented prompt generation and template management
 - Added comprehensive documentation for the Prompt Generation System
+- Created a Next.js frontend with a basic UI for video content creation
+- Set up API routes for handling video creation requests
 
 All tests are currently passing, indicating that the core functionality is working as expected.
 
@@ -32,8 +34,22 @@ SHORT-VIDEO-CONTENT-CREATOR/
 │   └── developer_guide.md
 ├── examples/
 │   └── prompt_generator_examples.py
-├── instance/
-├── public/
+├── frontend/
+│   ├── components/
+│   │   ├── Layout.js
+│   │   └── Navbar.js
+│   ├── pages/
+│   │   ├── api/
+│   │   │   └── create-video.js
+│   │   ├── _app.js
+│   │   ├── index.js
+│   │   └── dashboard.js
+│   ├── styles/
+│   │   └── globals.css
+│   ├── .gitignore
+│   ├── next.config.js
+│   ├── package.json
+│   └── tailwind.config.js
 ├── src/
 │   ├── __init__.py
 │   ├── app.py
@@ -83,19 +99,31 @@ For detailed information on how to install, use, and contribute to this project,
 For a quick start, follow these steps:
 
 1. Clone the repository and navigate to the project directory.
-2. Create and activate a virtual environment.
-3. Install dependencies with `pip install -r requirements.txt`.
-4. Set up your environment variables in a `.env` file.
-5. Run the server with `python src/server.py`.
+2. Set up the backend:
+   a. Create and activate a virtual environment.
+   b. Install backend dependencies with `pip install -r requirements.txt`.
+   c. Set up your environment variables in a `.env` file.
+   d. Run the server with `python src/server.py`.
+3. Set up the frontend:
+   a. Navigate to the `frontend` directory.
+   b. Install frontend dependencies with `npm install`.
+   c. Run the development server with `npm run dev`.
 
 For more detailed instructions, please refer to the [Installation Guide](docs/installation_guide.md).
 
 ## Running Tests
 
-To run all tests:
+To run all backend tests:
 
 ```
 python run_tests.py
+```
+
+To run frontend tests (once implemented):
+
+```
+cd frontend
+npm test
 ```
 
 ## Contributing
