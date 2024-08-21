@@ -13,3 +13,5 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: jest.fn(),
   })),
 });
+
+jest.spyOn(console, 'warn').mockImplementation(() => {});

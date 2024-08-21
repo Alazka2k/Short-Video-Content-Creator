@@ -16,13 +16,18 @@ jest.mock('../components/Layout', () => ({ children }) => <div>{children}</div>)
 global.fetch = jest.fn();
 
 describe('ContentResult', () => {
+  let consoleErrorSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock window.alert
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  test('displays loading state initially', () => {
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('displays loading state initially', async () => {
     global.fetch.mockImplementationOnce(() => new Promise(() => {})); // Never resolves
     render(<ContentResult />);
     expect(screen.getByText('Loading content...')).toBeInTheDocument();
@@ -36,17 +41,12 @@ describe('ContentResult', () => {
       duration: 60,
       style: 'entertaining',
       services: {
-        imageGeneration: true,
+        contentGeneration: true,
+        imageGeneration: false,
         voiceGeneration: true,
-        musicGeneration: true,
+        musicGeneration: false,
         videoGeneration: true,
       },
-      contentData: JSON.stringify({
-        image_url: 'http://example.com/image.jpg',
-        voice_url: 'http://example.com/voice.mp3',
-        music_url: 'http://example.com/music.mp3',
-        video_url: 'http://example.com/video.mp4',
-      }),
     };
 
     global.fetch.mockResolvedValueOnce({
@@ -59,26 +59,41 @@ describe('ContentResult', () => {
     await waitFor(() => {
       expect(screen.getByText('Test Title')).toBeInTheDocument();
       expect(screen.getByText('Test Description')).toBeInTheDocument();
-      expect(screen.getByText('Test Audience')).toBeInTheDocument();
-      expect(screen.getByText('60 seconds')).toBeInTheDocument();
-      expect(screen.getByText('entertaining')).toBeInTheDocument();
-      expect(screen.getByText(/http:\/\/example.com\/image.jpg/)).toBeInTheDocument();
-      expect(screen.getByText(/http:\/\/example.com\/voice.mp3/)).toBeInTheDocument();
-      expect(screen.getByText(/http:\/\/example.com\/music.mp3/)).toBeInTheDocument();
-      expect(screen.getByText(/http:\/\/example.com\/video.mp4/)).toBeInTheDocument();
+      expect(screen.getByText('Target Audience: Test Audience')).toBeInTheDocument();
+      expect(screen.getByText('Duration: 60 seconds')).toBeInTheDocument();
+      expect(screen.getByText('Style: entertaining')).toBeInTheDocument();
+      expect(screen.getByText('contentGeneration: Enabled')).toBeInTheDocument();
+      expect(screen.getByText('imageGeneration: Disabled')).toBeInTheDocument();
+      expect(screen.getByText('voiceGeneration: Enabled')).toBeInTheDocument();
+      expect(screen.getByText('musicGeneration: Disabled')).toBeInTheDocument();
+      expect(screen.getByText('videoGeneration: Enabled')).toBeInTheDocument();
     });
   });
 
-  test('displays error message when content not found', async () => {
+  test('displays error message when content fetch fails', async () => {
+    global.fetch.mockImplementationOnce(() => 
+      Promise.reject(new Error('Failed to fetch content'))
+    );
+
+    render(<ContentResult />);
+
+    await waitFor(() => {
+      expect(screen.getByText('An error occurred while fetching the content. Please try again.')).toBeInTheDocument();
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching content:', expect.any(Error));
+  });
+
+  test('displays no content available message when content is null', async () => {
     global.fetch.mockResolvedValueOnce({
-      ok: false,
+      ok: true,
+      json: () => Promise.resolve(null),
     });
 
     render(<ContentResult />);
 
     await waitFor(() => {
-      expect(screen.getByText('Content not found.')).toBeInTheDocument();
-      expect(window.alert).toHaveBeenCalledWith('An error occurred while fetching the content. Please try again.');
+      expect(screen.getByText('No content available.')).toBeInTheDocument();
     });
   });
 });

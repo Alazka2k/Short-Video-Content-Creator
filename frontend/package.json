@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
-    "test:log": "jest --no-color > test-output.log 2>&1"
+    "test:log": "jest --no-color > test-output.log 2>&1",
+    "test:summary": "jest --json --outputFile=test-output.json && node -e \"const fs=require('fs');const result=JSON.parse(fs.readFileSync('test-output.json','utf8'));console.log('Failed Tests:');result.testResults.forEach(f=>f.assertionResults.filter(t=>t.status==='failed').forEach(t=>{console.log(`\\n${t.fullName}`);console.log(t.failureMessages.join('\\n'))}));console.log(`\\nTest Suites: ${result.numFailedTestSuites} failed, ${result.numPassedTestSuites} passed, ${result.numTotalTestSuites} total`);console.log(`Tests:       ${result.numFailedTests} failed, ${result.numPassedTests} passed, ${result.numTotalTests} total`);fs.unlinkSync('test-output.json');\""
   },
   "dependencies": {
     "autoprefixer": "^10.4.20",

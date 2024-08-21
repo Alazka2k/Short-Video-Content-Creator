@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import Layout from '../components/Layout';
 import { useRouter } from 'next/router';
+import Layout from '../components/Layout';
 
 const CreateContent = () => {
   const router = useRouter();
@@ -19,6 +19,7 @@ const CreateContent = () => {
     },
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -41,7 +42,8 @@ const CreateContent = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-
+    setError('');
+  
     try {
       const response = await fetch('/api/create-content', {
         method: 'POST',
@@ -50,11 +52,11 @@ const CreateContent = () => {
         },
         body: JSON.stringify(formData),
       });
-
+  
       if (!response.ok) {
         throw new Error('Failed to create content');
       }
-
+  
       const result = await response.json();
       router.push({
         pathname: '/content-result',
@@ -62,7 +64,7 @@ const CreateContent = () => {
       });
     } catch (error) {
       console.error('Error creating content:', error);
-      alert('An error occurred while creating the content. Please try again.');
+      setError('An error occurred while creating the content. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +73,8 @@ const CreateContent = () => {
   return (
     <Layout>
       <h1 className="text-2xl font-bold mb-4 text-gray-800">Create New Content</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {error && <div className="text-red-500 mb-4" role="alert" data-testid="error-message">{error}</div>}
+      <form onSubmit={handleSubmit} className="space-y-4" data-testid="create-content-form">
         <div>
           <label htmlFor="title" className="block mb-1 text-gray-700">Content Title</label>
           <input
@@ -82,6 +85,7 @@ const CreateContent = () => {
             onChange={handleInputChange}
             className="w-full px-3 py-2 border rounded text-gray-700"
             required
+            data-testid="title-input"
           />
         </div>
         <div>
@@ -94,6 +98,7 @@ const CreateContent = () => {
             className="w-full px-3 py-2 border rounded text-gray-700"
             rows="3"
             required
+            data-testid="description-input"
           />
         </div>
         <div>
@@ -105,6 +110,7 @@ const CreateContent = () => {
             value={formData.targetAudience}
             onChange={handleInputChange}
             className="w-full px-3 py-2 border rounded text-gray-700"
+            data-testid="target-audience-input"
           />
         </div>
         <div>
@@ -118,6 +124,7 @@ const CreateContent = () => {
             className="w-full px-3 py-2 border rounded text-gray-700"
             min="1"
             required
+            data-testid="duration-input"
           />
         </div>
         <div>
@@ -128,6 +135,7 @@ const CreateContent = () => {
             value={formData.style}
             onChange={handleInputChange}
             className="w-full px-3 py-2 border rounded text-gray-700"
+            data-testid="style-select"
           >
             <option value="informative">Informative</option>
             <option value="entertaining">Entertaining</option>
@@ -145,6 +153,7 @@ const CreateContent = () => {
                   checked={isSelected}
                   onChange={() => handleServiceToggle(service)}
                   className="mr-2"
+                  data-testid={`${service.toLowerCase()}-checkbox`}
                 />
                 <label htmlFor={service} className="text-gray-700">
                   {service.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
@@ -157,6 +166,7 @@ const CreateContent = () => {
           type="submit"
           className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
           disabled={isLoading}
+          data-testid="submit-button"
         >
           {isLoading ? 'Creating...' : 'Create Content'}
         </button>

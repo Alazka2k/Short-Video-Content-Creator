@@ -1,12 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreateContent from '../pages/create-content';
 
 // Mock the next/router
+const mockPush = jest.fn();
 jest.mock('next/router', () => ({
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
   }),
 }));
 
@@ -19,23 +20,115 @@ global.fetch = jest.fn();
 describe('CreateContent', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Mock window.alert
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
   test('renders form fields correctly', () => {
     render(<CreateContent />);
     
-    expect(screen.getByLabelText(/Content Title/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Description/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Target Audience/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Duration/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Content Style/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Content Generation/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Image Generation/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Voice Generation/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Music Generation/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Video Generation/i)).toBeInTheDocument();
+    expect(screen.getByTestId('title-input')).toBeInTheDocument();
+    expect(screen.getByTestId('description-input')).toBeInTheDocument();
+    expect(screen.getByTestId('target-audience-input')).toBeInTheDocument();
+    expect(screen.getByTestId('duration-input')).toBeInTheDocument();
+    expect(screen.getByTestId('style-select')).toBeInTheDocument();
+    expect(screen.getByTestId('contentgeneration-checkbox')).toBeInTheDocument();
+    expect(screen.getByTestId('imagegeneration-checkbox')).toBeInTheDocument();
+    expect(screen.getByTestId('voicegeneration-checkbox')).toBeInTheDocument();
+    expect(screen.getByTestId('musicgeneration-checkbox')).toBeInTheDocument();
+    expect(screen.getByTestId('videogeneration-checkbox')).toBeInTheDocument();
+  });
+
+  test('handles successful form submission', async () => {
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ id: '123' }),
+    });
+
+    render(<CreateContent />);
+
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('title-input'), 'Test Title');
+      await userEvent.type(screen.getByTestId('description-input'), 'Test Description');
+      await userEvent.click(screen.getByTestId('submit-button'));
+    });
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/create-content', expect.any(Object));
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/content-result',
+        query: { id: '123' },
+      });
+    }, { timeout: 5000 });
+  });
+
+  test('handles form submission error', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    global.fetch.mockRejectedValueOnce(new Error('API Error'));
+  
+    render(<CreateContent />);
+  
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('title-input'), 'Test Title');
+      await userEvent.type(screen.getByTestId('description-input'), 'Test Description');
+      await userEvent.click(screen.getByTestId('submit-button'));
+    });
+  
+    await waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(screen.getByTestId('error-message')).toBeInTheDocument();
+      expect(screen.getByTestId('error-message')).toHaveTextContent('An error occurred while creating the content. Please try again.');
+    }, { timeout: 5000 });
+  
+    consoleSpy.mockRestore();
+  });
+
+  test('disables submit button while loading and enables after completion', async () => {
+    jest.useFakeTimers();
+    
+    global.fetch.mockImplementationOnce(() => 
+      new Promise(resolve => setTimeout(() => resolve({ ok: true, json: () => Promise.resolve({ id: '123' }) }), 1000))
+    );
+  
+    render(<CreateContent />);
+  
+    const submitButton = screen.getByTestId('submit-button');
+    
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('title-input'), 'Test Title');
+      await userEvent.type(screen.getByTestId('description-input'), 'Test Description');
+      userEvent.click(submitButton);
+    });
+  
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveTextContent('Creating...');
+  
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+  
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
+      expect(submitButton).toHaveTextContent('Create Content');
+    }, { timeout: 5000 });
+
+    jest.useRealTimers();
+  });
+
+  test('toggles services correctly', async () => {
+    render(<CreateContent />);
+
+    const contentGenerationCheckbox = screen.getByTestId('contentgeneration-checkbox');
+    const imageGenerationCheckbox = screen.getByTestId('imagegeneration-checkbox');
+
+    expect(contentGenerationCheckbox).toBeChecked();
+    expect(imageGenerationCheckbox).not.toBeChecked();
+
+    await act(async () => {
+      await userEvent.click(imageGenerationCheckbox);
+      await userEvent.click(contentGenerationCheckbox);
+    });
+
+    expect(contentGenerationCheckbox).not.toBeChecked();
+    expect(imageGenerationCheckbox).toBeChecked();
   });
 
   test('submits form with correct data', async () => {
@@ -46,15 +139,19 @@ describe('CreateContent', () => {
 
     render(<CreateContent />);
 
-    await userEvent.type(screen.getByLabelText(/Content Title/i), 'Test Title');
-    await userEvent.type(screen.getByLabelText(/Description/i), 'Test Description');
-    await userEvent.type(screen.getByLabelText(/Target Audience/i), 'Test Audience');
-    await userEvent.type(screen.getByLabelText(/Duration/i), '60');
-    await userEvent.selectOptions(screen.getByLabelText(/Content Style/i), 'entertaining');
-    await userEvent.click(screen.getByLabelText(/Image Generation/i));
-    await userEvent.click(screen.getByLabelText(/Voice Generation/i));
+    await act(async () => {
+      await userEvent.type(screen.getByTestId('title-input'), 'Test Title');
+      await userEvent.type(screen.getByTestId('description-input'), 'Test Description');
+      await userEvent.type(screen.getByTestId('target-audience-input'), 'Test Audience');
+      await userEvent.type(screen.getByTestId('duration-input'), '60');
+      await userEvent.selectOptions(screen.getByTestId('style-select'), 'entertaining');
+      await userEvent.click(screen.getByTestId('imagegeneration-checkbox'));
+      await userEvent.click(screen.getByTestId('voicegeneration-checkbox'));
+    });
 
-    await userEvent.click(screen.getByText('Create Content'));
+    await act(async () => {
+      await userEvent.click(screen.getByTestId('submit-button'));
+    });
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith('/api/create-content', expect.any(Object));
@@ -73,25 +170,6 @@ describe('CreateContent', () => {
           videoGeneration: false,
         },
       });
-    });
-  });
-
-  test('handles form submission error', async () => {
-    global.fetch.mockResolvedValueOnce({
-      ok: false,
-    });
-
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-    render(<CreateContent />);
-
-    await userEvent.click(screen.getByText('Create Content'));
-
-    await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalled();
-      expect(window.alert).toHaveBeenCalledWith('An error occurred while creating the content. Please try again.');
-    });
-
-    consoleSpy.mockRestore();
+    }, { timeout: 5000 });
   });
 });
