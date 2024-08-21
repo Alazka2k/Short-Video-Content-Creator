@@ -19,10 +19,14 @@ def run_tests():
     sys.path.insert(0, src_dir)
     logger.info(f"Added {src_dir} to Python path")
 
-    # Check for OpenAI API key
-    if not os.environ.get('OPENAI_API_KEY'):
-        logger.warning("OPENAI_API_KEY not found in environment variables")
-        logger.warning("Please set your OpenAI API key in the .env file or as an environment variable")
+    # Check for required API keys
+    required_keys = ['OPENAI_API_KEY', 'BLACK_FOREST_API_KEY', 'ELEVENLABS_API_KEY', 'LUMA_API_KEY', 'SUNA_API_KEY']
+    missing_keys = [key for key in required_keys if not os.environ.get(key)]
+    
+    if missing_keys:
+        for key in missing_keys:
+            logger.warning(f"{key} not found in environment variables")
+        logger.warning("Please set all required API keys in the .env file or as environment variables")
         return False
 
     # Discover and run tests
@@ -39,6 +43,18 @@ def run_tests():
         def startTest(self, test):
             super().startTest(test)
             logger.info(f"Running test: {test.id()}")
+
+        def addSuccess(self, test):
+            super().addSuccess(test)
+            logger.info(f"Test passed: {test.id()}")
+
+        def addError(self, test, err):
+            super().addError(test, err)
+            logger.error(f"Test error: {test.id()} - {err[1]}")
+
+        def addFailure(self, test, err):
+            super().addFailure(test, err)
+            logger.error(f"Test failed: {test.id()} - {err[1]}")
 
     result = runner.run(suite)
     

@@ -21,7 +21,7 @@ def create_app(config_name=None):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
 
-        required_fields = ['title', 'description', 'targetAudience', 'duration', 'style', 'services']
+        required_fields = ['title', 'description', 'target_audience', 'duration', 'style', 'services']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), 400
 
@@ -29,7 +29,7 @@ def create_app(config_name=None):
             content = Content(
                 title=data['title'],
                 description=data['description'],
-                target_audience=data['targetAudience'],
+                target_audience=data['target_audience'],
                 duration=data['duration'],
                 style=data['style'],
                 services=str(data['services'])
@@ -38,16 +38,24 @@ def create_app(config_name=None):
             db.session.commit()
 
             result = content_creation_worker(content.id, data['services'])
+            
+            # Update the content with the generated data
+            content.content = str(result)
+            db.session.commit()
+
             return jsonify(result), 200
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/get-content', methods=['GET'])
-    def get_content():
+    @app.route('/api/get-content/<int:content_id>', methods=['GET'])
+    def get_content(content_id):
         try:
-            contents = Content.query.order_by(Content.created_at.desc()).all()
-            return jsonify([content.to_dict() for content in contents]), 200
+            content = Content.query.get(content_id)
+            if not content:
+                return jsonify({'error': 'Content not found'}), 404
+
+            return jsonify(content.to_dict()), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 

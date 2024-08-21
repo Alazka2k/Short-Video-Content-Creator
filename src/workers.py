@@ -1,7 +1,7 @@
 import logging
 from flask import current_app
 from models import db, Content
-from services import generate_content_with_openai
+from services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
 from typing import Dict, Any, List
 import os
 from dotenv import load_dotenv
@@ -62,36 +62,61 @@ class ContentCreationPipeline:
         prompt = self.prompt_generator.generate_prompt(template_name, input_data)
         generated_content = generate_content_with_openai(prompt)
         processed_content = self.process_generated_content(generated_content, input_data)
+        
+        # Generate additional content based on selected services
+        if input_data.get('generate_image'):
+            processed_content['image_url'] = generate_image(processed_content['description'])
+        
+        if input_data.get('generate_voice'):
+            processed_content['voice_url'] = generate_voice(processed_content['audio_narration'])
+        
+        if input_data.get('generate_music'):
+            processed_content['music_url'] = generate_music(f"Create {input_data.get('style', 'background')} music for a video about {input_data['name']}")
+        
+        if input_data.get('generate_video'):
+            video_data = {
+                "script": processed_content['audio_narration'],
+                "image_url": processed_content.get('image_url'),
+                "voice_url": processed_content.get('voice_url'),
+                "music_url": processed_content.get('music_url')
+            }
+            processed_content['video_url'] = generate_video(video_data)
+
         self.save_to_database(processed_content, input_data['name'])
         progress_tracker.update(index, {"name": input_data['name'], "status": "completed"})
         return processed_content
 
-    def process_generated_content(self, generated_content: str, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        # Parse the generated content into structured data
-        content_lines = generated_content.split('\n')
+    def process_generated_content(self, generated_content: Dict[str, Any], input_data: Dict[str, Any]) -> Dict[str, Any]:
         processed_content = {
             'name': input_data['name'],
-            'title': content_lines[0] if content_lines else '',
-            'description': content_lines[1] if len(content_lines) > 1 else '',
-            'scenes': [],
-            'audio_narration': ''
+            'title': generated_content.get('title', ''),
+            'description': generated_content.get('description', ''),
+            'scenes': generated_content.get('scenes', []),
+            'audio_narration': generated_content.get('audio_narration', '')
         }
 
-        # Extract scenes and audio narration
-        scene_start = False
-        audio_start = False
-        for line in content_lines[2:]:
-            if line.startswith("Scene "):
-                scene_start = True
-                audio_start = False
-                processed_content['scenes'].append(line)
-            elif line.startswith("Audio Narration:"):
-                scene_start = False
-                audio_start = True
-            elif scene_start:
-                processed_content['scenes'][-1] += f"\n{line}"
-            elif audio_start:
-                processed_content['audio_narration'] += f"{line}\n"
+        if isinstance(generated_content.get('raw_content'), str):
+            # If the content is not properly structured, attempt to parse it
+            content_lines = generated_content['raw_content'].split('\n')
+            processed_content['title'] = content_lines[0] if content_lines else ''
+            processed_content['description'] = content_lines[1] if len(content_lines) > 1 else ''
+            processed_content['scenes'] = []
+            processed_content['audio_narration'] = ''
+
+            scene_start = False
+            audio_start = False
+            for line in content_lines[2:]:
+                if line.startswith("Scene "):
+                    scene_start = True
+                    audio_start = False
+                    processed_content['scenes'].append(line)
+                elif line.startswith("Audio Narration:"):
+                    scene_start = False
+                    audio_start = True
+                elif scene_start:
+                    processed_content['scenes'][-1] += f"\n{line}"
+                elif audio_start:
+                    processed_content['audio_narration'] += f"{line}\n"
 
         return processed_content
 

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import Layout from '../components/Layout';
+import { useRouter } from 'next/router';
 
 const CreateContent = () => {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -9,13 +11,14 @@ const CreateContent = () => {
     duration: '',
     style: 'informative',
     services: {
-      contentGeneration: false,
-      pictureCreation: false,
+      contentGeneration: true,
+      imageGeneration: false,
       voiceGeneration: false,
       musicGeneration: false,
-      e2eVideoGeneration: false,
+      videoGeneration: false,
     },
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -37,6 +40,8 @@ const CreateContent = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+
     try {
       const response = await fetch('/api/create-content', {
         method: 'POST',
@@ -45,12 +50,21 @@ const CreateContent = () => {
         },
         body: JSON.stringify(formData),
       });
-      const data = await response.json();
-      console.log('API response:', data);
-      // Here you can add logic to handle the response, e.g., showing a success message or redirecting to results page
+
+      if (!response.ok) {
+        throw new Error('Failed to create content');
+      }
+
+      const result = await response.json();
+      router.push({
+        pathname: '/content-result',
+        query: { id: result.id },
+      });
     } catch (error) {
-      console.error('Error:', error);
-      // Here you can add logic to handle errors, e.g., showing an error message
+      console.error('Error creating content:', error);
+      alert('An error occurred while creating the content. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -139,8 +153,12 @@ const CreateContent = () => {
             ))}
           </div>
         </div>
-        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-          Create Content
+        <button
+          type="submit"
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
+          disabled={isLoading}
+        >
+          {isLoading ? 'Creating...' : 'Create Content'}
         </button>
       </form>
     </Layout>
