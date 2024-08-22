@@ -1,7 +1,7 @@
 import logging
 from flask import current_app
 from models import db, Content
-from services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
+from services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video, VideoContent
 from typing import Dict, Any, List
 import os
 from dotenv import load_dotenv
@@ -37,6 +37,7 @@ class PromptGenerator:
 class ContentCreationPipeline:
     def __init__(self):
         self.prompt_generator = PromptGenerator()
+        self.logger = logging.getLogger(__name__)
 
     def process_input(self, input_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
@@ -51,74 +52,81 @@ class ContentCreationPipeline:
                     result = future.result()
                     results.append(result)
                 except Exception as e:
-                    logging.error(f"Error processing entry: {entry['name']} - {str(e)}")
+                    self.logger.error(f"Error processing entry: {entry['name']} - {str(e)}", exc_info=True)
                     results.append({"error": str(e), "name": entry['name']})
 
         return results
 
     def create_content(self, input_data: Dict[str, Any], index: int, total_entries: int, progress_tracker: ProgressTracker) -> Dict[str, Any]:
-        logging.info(f"Processing entry {index}/{total_entries}: {input_data['name']}")
-        template_name = input_data.get('template', 'basic')
-        prompt = self.prompt_generator.generate_prompt(template_name, input_data)
-        generated_content = generate_content_with_openai(prompt)
-        processed_content = self.process_generated_content(generated_content, input_data)
-        
-        # Generate additional content based on selected services
-        if input_data.get('generate_image'):
-            processed_content['image_url'] = generate_image(processed_content['description'])
-        
-        if input_data.get('generate_voice'):
-            processed_content['voice_url'] = generate_voice(processed_content['audio_narration'])
-        
-        if input_data.get('generate_music'):
-            processed_content['music_url'] = generate_music(f"Create {input_data.get('style', 'background')} music for a video about {input_data['name']}")
-        
-        if input_data.get('generate_video'):
+        self.logger.info(f"Processing entry {index}/{total_entries}: {input_data['name']}")
+        try:
+            template_name = input_data.get('template', 'basic')
+            prompt = self.prompt_generator.generate_prompt(template_name, input_data)
+            generated_content: VideoContent = generate_content_with_openai(prompt)
+            processed_content = self.process_generated_content(generated_content, input_data)
+            
+            # Generate additional content based on selected services
+            if input_data.get('generate_image'):
+                processed_content['image_url'] = self.generate_image_content(processed_content['description'])
+            
+            if input_data.get('generate_voice'):
+                processed_content['voice_url'] = self.generate_voice_content(processed_content['audio_narration'])
+            
+            if input_data.get('generate_music'):
+                processed_content['music_url'] = self.generate_music_content(input_data)
+            
+            if input_data.get('generate_video'):
+                processed_content['video_url'] = self.generate_video_content(processed_content)
+
+            self.save_to_database(processed_content, input_data['name'])
+            progress_tracker.update(index, {"name": input_data['name'], "status": "completed"})
+            return processed_content
+        except Exception as e:
+            self.logger.error(f"Error creating content for {input_data['name']}: {str(e)}", exc_info=True)
+            raise
+
+    def process_generated_content(self, generated_content: VideoContent, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            'name': input_data['name'],
+            'title': generated_content.video_title,
+            'description': generated_content.description,
+            'scenes': [scene.dict() for scene in generated_content.main_scenes],
+            'audio_narration': '\n'.join([scene.scene_description for scene in generated_content.main_scenes])
+        }
+
+    def generate_image_content(self, description: str) -> str:
+        try:
+            return generate_image(description)
+        except Exception as e:
+            self.logger.error(f"Error generating image: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_voice_content(self, script: str) -> str:
+        try:
+            return generate_voice(script)
+        except Exception as e:
+            self.logger.error(f"Error generating voice: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_music_content(self, input_data: Dict[str, Any]) -> str:
+        try:
+            return generate_music(f"Create {input_data.get('style', 'background')} music for a video about {input_data['name']}")
+        except Exception as e:
+            self.logger.error(f"Error generating music: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_video_content(self, processed_content: Dict[str, Any]) -> str:
+        try:
             video_data = {
                 "script": processed_content['audio_narration'],
                 "image_url": processed_content.get('image_url'),
                 "voice_url": processed_content.get('voice_url'),
                 "music_url": processed_content.get('music_url')
             }
-            processed_content['video_url'] = generate_video(video_data)
-
-        self.save_to_database(processed_content, input_data['name'])
-        progress_tracker.update(index, {"name": input_data['name'], "status": "completed"})
-        return processed_content
-
-    def process_generated_content(self, generated_content: Dict[str, Any], input_data: Dict[str, Any]) -> Dict[str, Any]:
-        processed_content = {
-            'name': input_data['name'],
-            'title': generated_content.get('title', ''),
-            'description': generated_content.get('description', ''),
-            'scenes': generated_content.get('scenes', []),
-            'audio_narration': generated_content.get('audio_narration', '')
-        }
-
-        if isinstance(generated_content.get('raw_content'), str):
-            # If the content is not properly structured, attempt to parse it
-            content_lines = generated_content['raw_content'].split('\n')
-            processed_content['title'] = content_lines[0] if content_lines else ''
-            processed_content['description'] = content_lines[1] if len(content_lines) > 1 else ''
-            processed_content['scenes'] = []
-            processed_content['audio_narration'] = ''
-
-            scene_start = False
-            audio_start = False
-            for line in content_lines[2:]:
-                if line.startswith("Scene "):
-                    scene_start = True
-                    audio_start = False
-                    processed_content['scenes'].append(line)
-                elif line.startswith("Audio Narration:"):
-                    scene_start = False
-                    audio_start = True
-                elif scene_start:
-                    processed_content['scenes'][-1] += f"\n{line}"
-                elif audio_start:
-                    processed_content['audio_narration'] += f"{line}\n"
-
-        return processed_content
+            return generate_video(video_data)
+        except Exception as e:
+            self.logger.error(f"Error generating video: {str(e)}", exc_info=True)
+            return ""
 
     def save_to_database(self, processed_content: Dict[str, Any], name: str):
         try:
@@ -130,9 +138,10 @@ class ContentCreationPipeline:
             )
             db.session.add(content)
             db.session.commit()
-            logging.info(f"Saved content to database for {name}")
+            self.logger.info(f"Saved content to database for {name}")
         except Exception as e:
-            logging.error(f"Error saving to database: {str(e)}")
+            self.logger.error(f"Error saving to database: {str(e)}", exc_info=True)
+            db.session.rollback()
             raise
 
     def load_input_from_csv(self, file_path: str) -> List[Dict[str, Any]]:
@@ -144,22 +153,23 @@ class ContentCreationPipeline:
                     input_data.append(row)
             return input_data
         except Exception as e:
-            logging.error(f"Error loading input from CSV: {str(e)}")
+            self.logger.error(f"Error loading input from CSV: {str(e)}", exc_info=True)
             raise
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Initialize the pipeline
 content_pipeline = ContentCreationPipeline()
 
 def content_creation_worker(template_name: str, run_parameters: Dict[str, Any], variable_inputs: List[Dict[str, Any]], app=None) -> List[Dict[str, Any]]:
-    logging.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
     
     try:
         input_data = [{**run_parameters, **entry, 'template': template_name} for entry in variable_inputs]
         results = content_pipeline.process_input(input_data)
         return results
     except Exception as e:
-        logging.error(f"Error in content creation: {str(e)}")
+        logger.error(f"Error in content creation: {str(e)}", exc_info=True)
         return [{"error": f"Failed to generate content: {str(e)}"}]
