@@ -1,74 +1,133 @@
 import os
 import sys
-from dotenv import load_dotenv
-from flask import Flask
-import json
+import logging
 
-# Add the src directory to the Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(os.path.dirname(current_dir), 'src')
-sys.path.insert(0, src_dir)
+# Add the project root directory to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root)
 
+from src.schemas import VideoContent
 from src.app import create_app
-from src.workers import content_creation_worker
+from src.content_creation import ContentCreator
+from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
 
-# Ensure the OpenAI API key is set
-if not os.getenv("OPENAI_API_KEY"):
-    print("Error: OPENAI_API_KEY environment variable is not set.")
-    sys.exit(1)
+def read_input_file():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    input_file_path = os.path.join(current_dir, 'test_input.txt')
+    
+    with open(input_file_path, 'r') as file:
+        lines = file.readlines()
+    
+    return [line.strip() for line in lines]
 
-# Create a Flask app context
-app = create_app()
+def get_manual_input():
+    inputs = []
+    prompts = [
+        "Enter the title of the video: ",
+        "Enter a brief description: ",
+        "Enter the target audience: ",
+        "Enter the duration in seconds: ",
+        "Enter the style (e.g., informative, entertaining): ",
+        "Enter the number of scenes: ",
+        "Generate images? (y/n): ",
+        "Generate voice? (y/n): ",
+        "Generate music? (y/n): ",
+        "Generate video? (y/n): "
+    ]
+    for prompt in prompts:
+        inputs.append(input(prompt))
+    return inputs
 
-def get_user_input():
-    title = input("Enter the title of the video: ")
-    description = input("Enter a brief description: ")
-    target_audience = input("Enter the target audience: ")
-    duration = int(input("Enter the duration in seconds: "))
-    style = input("Enter the style (e.g., informative, entertaining): ")
-    scene_amount = int(input("Enter the number of scenes: "))
+def main():
+    app = create_app()
+    template_file_path = os.path.join(project_root, "src", "prompt_templates.yaml")
+    test_input_path = os.path.join(project_root, "tests", "test_input.txt")
+    content_creator = ContentCreator(template_file_path, test_input_path)
 
-    services = {
-        "contentGeneration": True,
-        "imageGeneration": input("Generate images? (y/n): ").lower() == 'y',
-        "voiceGeneration": input("Generate voice? (y/n): ").lower() == 'y',
-        "musicGeneration": input("Generate music? (y/n): ").lower() == 'y',
-        "videoGeneration": input("Generate video? (y/n): ").lower() == 'y'
-    }
+    use_template = input("Use template input? (y/n): ").lower() == 'y'
+    
+    if use_template:
+        inputs = read_input_file()
+        input_data = {
+            "title": f"A video about {inputs[0]}",
+            "description": inputs[1],
+            "target_audience": inputs[2],
+            "duration": int(inputs[3]),
+            "style": inputs[4],
+            "scene_amount": int(inputs[5]),
+            "video_length": int(inputs[3]),
+            "image_style": inputs[4],
+            "services": {
+                "contentGeneration": True,
+                "imageGeneration": False,
+                "voiceGeneration": False,
+                "musicGeneration": False,
+                "videoGeneration": False
+            }
+        }
+    else:
+        inputs = get_manual_input()
+        input_data = {
+            "title": inputs[0],
+            "description": inputs[1],
+            "target_audience": inputs[2],
+            "duration": int(inputs[3]),
+            "style": inputs[4],
+            "scene_amount": int(inputs[5]),
+            "video_length": int(inputs[3]),  # Assuming duration and video_length are the same
+            "image_style": "realistic",  # Add this line or get it from user input
+            "services": {
+                "contentGeneration": True,
+                "imageGeneration": inputs[6].lower() == 'y',
+                "voiceGeneration": inputs[7].lower() == 'y',
+                "musicGeneration": inputs[8].lower() == 'y',
+                "videoGeneration": inputs[9].lower() == 'y'
+            }
+        }
 
-    return {
-        "title": title,
-        "description": description,
-        "target_audience": target_audience,
-        "duration": duration,
-        "style": style,
-        "scene_amount": scene_amount,
-        "services": services
-    }
+    # Remove 'name' from input_data if it exists
+    input_data.pop('name', None)
 
-def test_content_creation():
+    app.logger.info(f"Input data: {input_data}")
+    
+    # Use app context
     with app.app_context():
-        while True:
-            print("\nStarting new content creation test...")
-            input_data = get_user_input()
+        try:
+            # Generate content using the ContentCreator
+            generated_content = content_creator.create_content(input_data, is_test=use_template)
+            
+            # Log the generated content
+            app.logger.info(f"Generated content: {generated_content}")
+            
+            # Perform some assertions or checks on the generated content
+            assert generated_content is not None, "Content generation failed"
+            assert len(generated_content) > 0, "Generated content is empty"
+            
+            # Detailed checks for scenes and image prompts
+            assert 'scenes' in generated_content, "Scenes not found in generated content"
+            assert len(generated_content['scenes']) == input_data['scene_amount'], f"Expected {input_data['scene_amount']} scenes, but got {len(generated_content['scenes'])}"
 
-            print(f"\nInput data: {json.dumps(input_data, indent=2)}")
+            print("\n--- Scene Details ---")
+            for i, scene in enumerate(generated_content['scenes'], 1):
+                print(f"\nScene {i}:")
+                print(f"Description: {scene.get('description', 'N/A')}")
+                print(f"Duration: {scene.get('duration', 'N/A')} seconds")
+                print(f"Script: {scene.get('script', 'N/A')}")
 
-            # Call the content creation worker
-            result = content_creation_worker('basic', input_data, [{'name': input_data['title']}], app)
+            if input_data['services']['imageGeneration']:
+                assert 'image_prompts' in generated_content, "Image prompts not found when image generation was requested"
+                assert len(generated_content['image_prompts']) > 0, "No image prompts generated"
 
-            if result and isinstance(result[0], dict) and 'error' not in result[0]:
-                print("\nContent creation successful!")
-                print(f"Generated content: {json.dumps(result[0], indent=2)}")
-            else:
-                error_message = result[0]['error'] if result and isinstance(result[0], dict) else 'Unknown error occurred'
-                print(f"\nError in content creation: {error_message}")
+                print("\n--- Image Prompts ---")
+                for i, prompt in enumerate(generated_content['image_prompts'], 1):
+                    print(f"\nImage {i}:")
+                    print(f"Prompt: {prompt}")
 
-            if input("\nDo you want to create another video? (y/n): ").lower() != 'y':
-                break
+            print("All specific content checks passed!")
+        except Exception as e:
+            app.logger.error(f"Error during content generation: {str(e)}")
+            print(f"Test failed: {str(e)}")
 
 if __name__ == "__main__":
-    test_content_creation()
+    main()

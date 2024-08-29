@@ -50,14 +50,65 @@ const ContentResult = () => {
       <p className="mb-2">Target Audience: {content.targetAudience}</p>
       <p className="mb-2">Duration: {content.duration} seconds</p>
       <p className="mb-2">Style: {content.style}</p>
+      
       {content.services && (
-        <div>
+        <div className="mb-4">
           <h2 className="text-xl font-bold mt-4 mb-2">Services</h2>
           <ul>
             {Object.entries(content.services).map(([service, isEnabled]) => (
               <li key={service}>{service}: {isEnabled ? 'Enabled' : 'Disabled'}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {content.generatedContent && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mt-4 mb-2">Generated Content</h2>
+          <h3 className="text-lg font-semibold">Video Content</h3>
+          {content.generatedContent.main_scenes.map((scene, index) => (
+            <div key={index} className="mb-2">
+              <h4 className="font-semibold">Scene {index + 1}</h4>
+              <p>Description: {scene.scene_description}</p>
+              <p>Visual Prompt: {scene.visual_prompt}</p>
+            </div>
+          ))}
+          <h3 className="text-lg font-semibold mt-4">Audio Narration</h3>
+          <p>{content.generatedContent.audio_narration}</p>
+        </div>
+      )}
+
+      {content.generatedPicture && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mt-4 mb-2">Generated Image</h2>
+          <img src={content.generatedPicture} alt="Generated visual" className="max-w-full h-auto" />
+        </div>
+      )}
+
+      {content.generatedVoice && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mt-4 mb-2">Generated Voice</h2>
+          <audio controls src={content.generatedVoice}>
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      )}
+
+      {content.generatedMusic && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mt-4 mb-2">Generated Music</h2>
+          <audio controls src={content.generatedMusic}>
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      )}
+
+      {content.generatedVideo && (
+        <div className="mb-4">
+          <h2 className="text-xl font-bold mt-4 mb-2">Generated Video</h2>
+          <video controls src={content.generatedVideo} className="max-w-full h-auto">
+            Your browser does not support the video element.
+          </video>
         </div>
       )}
     </Layout>

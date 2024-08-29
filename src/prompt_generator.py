@@ -14,25 +14,10 @@ class PromptGenerator:
         :param template_file: Path to the YAML file containing prompt templates.
         """
         self.logger = logging.getLogger(__name__)
-        self.templates = self._load_templates(template_file)
-        self.components = self._load_components()
-
-    def _load_templates(self, template_file: str) -> Dict[str, Dict[str, Any]]:
-        """
-        Load prompt templates from a YAML file.
-        
-        :param template_file: Path to the YAML file containing prompt templates.
-        :return: Dictionary of loaded templates.
-        :raises: Exception if the file cannot be loaded or parsed.
-        """
-        try:
-            with open(template_file, 'r') as file:
-                templates = yaml.safe_load(file)
-            self.logger.info(f"Loaded {len(templates)} templates from {template_file}")
-            return templates
-        except Exception as e:
-            self.logger.error(f"Failed to load template file: {e}")
-            raise
+        self.logger.info(f"Loading templates from: {template_file}")
+        with open(template_file, 'r') as file:
+            self.templates = yaml.safe_load(file)
+        self.logger.info(f"Loaded templates: {list(self.templates.keys())}")
 
     def _load_components(self) -> Dict[str, str]:
         """
@@ -47,32 +32,29 @@ class PromptGenerator:
             "closing": "Thank you for using our service.",
         }
 
-    def generate_prompt(self, template_name: str, variables: Dict[str, Any]) -> str:
+    def generate_prompt(self, template_name: str, **kwargs) -> str:
         """
         Generate a prompt using a specified template and variables.
         
         :param template_name: Name of the template to use.
-        :param variables: Dictionary of variables to fill in the template.
+        :param kwargs: Dictionary of variables to fill in the template.
         :return: Generated prompt string.
         :raises: ValueError if the template is not found.
         """
+        self.logger.info(f"Generating prompt for template: {template_name}")
         if template_name not in self.templates:
-            raise ValueError(f"Template '{template_name}' not found")
-
-        template_data = self.templates[template_name]
-        template = Template(template_data['template'])
+            raise ValueError(f"Template '{template_name}' not found. Available templates: {list(self.templates.keys())}")
+        template = self.templates[template_name]['template']
         
-        try:
-            expanded_template = self._expand_components(template.safe_substitute(variables))
-            prompt = Template(expanded_template).safe_substitute(variables)
-            self.logger.info(f"Generated prompt for template '{template_name}'")
-            return prompt
-        except KeyError as e:
-            self.logger.error(f"Missing variable in template: {e}")
-            raise
-        except Exception as e:
-            self.logger.error(f"Failed to generate prompt: {e}")
-            raise
+        # Filter kwargs to only include keys that are in the template
+        filtered_kwargs = {k: v for k, v in kwargs.items() if f"{{{k}}}" in template}
+        
+        # Log any unused kwargs
+        unused_kwargs = set(kwargs.keys()) - set(filtered_kwargs.keys())
+        if unused_kwargs:
+            self.logger.warning(f"Unused kwargs for template '{template_name}': {unused_kwargs}")
+        
+        return template.format(**filtered_kwargs)
 
     def _expand_components(self, template: str) -> str:
         """

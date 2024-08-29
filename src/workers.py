@@ -1,14 +1,14 @@
 import logging
 from flask import current_app
-from models import db, Content
-from services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video, VideoContent
+from .models import db, Content
+from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video, VideoContent
 from typing import Dict, Any, List
 import os
 from dotenv import load_dotenv
 import csv
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from progress_tracker import ProgressTracker
+from .progress_tracker import ProgressTracker
 
 # Load environment variables
 load_dotenv()

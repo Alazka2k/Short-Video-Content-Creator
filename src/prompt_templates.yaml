@@ -2,21 +2,26 @@
 
 video_content:
   template: |
-    {component:greeting}
-    Create a short video content about $name with the following specifications:
-    - Number of scenes: $scene_amount
-    - Video length: $video_length seconds
-    - Style: $image_style
+    Create a short video content about {title} with the following specifications:
+    - Number of scenes: {scene_amount}
+    - Video length: {video_length} seconds
+    - Style: {style}
+    - Target audience: {target_audience}
 
-    Please structure your response as follows:
-    1. Video Title: A catchy, informative title for the video.
-    2. Description: A brief overview of the video content (2-3 sentences).
-    3. Main Scenes: Provide $scene_amount scenes, each with:
-       - Scene description: A brief description of what happens in the scene.
-       - Visual prompt: A detailed description for image generation.
+    Please structure your response as a JSON object with the following format:
+    {{
+      "video_title": "A catchy, informative title for the video",
+      "description": "A brief overview of the video content (2-3 sentences)",
+      "main_scenes": [
+        {{
+          "scene_description": "A brief description of what happens in the scene",
+          "visual_prompt": "A detailed description for image generation"
+        }},
+        // ... repeat for each scene
+      ]
+    }}
 
-    Remember to keep the content engaging, factual, and suitable for the target audience (ages 18-50).
-    {component:closing}
+    Remember to keep the content engaging, factual, and suitable for the target audience: {target_audience}.
   max_length: 2000
 
 scene_audio_script:

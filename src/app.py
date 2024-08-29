@@ -1,12 +1,18 @@
 from flask import Flask, request, jsonify
-from models import db, Content
-from workers import content_creation_worker
+from .models import db, Content
+from .workers import content_creation_worker
 from typing import List, Dict, Any
-import yaml
 import os
+import yaml
+from flask_migrate import Migrate
 
-def load_config(config_file='config.yaml'):
-    with open(config_file, 'r') as file:
+def load_config():
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the path to config.yaml in the src folder
+    config_path = os.path.join(current_dir, 'config.yaml')
+    
+    with open(config_path, 'r') as file:
         return yaml.safe_load(file)
 
 def create_app(config_name=None):
@@ -25,7 +31,8 @@ def create_app(config_name=None):
     app.config.update(config)  # Add all config values to app.config
     
     db.init_app(app)
-
+    migrate = Migrate(app, db)
+    
     @app.route('/api/create-content', methods=['POST'])
     def create_content():
         data = request.json

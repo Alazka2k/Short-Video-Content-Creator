@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { startContentCreation } from '../../lib/contentCreation'
 
 const prisma = new PrismaClient()
 
@@ -7,29 +8,6 @@ export default async function handler(req, res) {
     try {
       const { title, description, targetAudience, duration, style, services } = req.body
 
-      // Call your backend API to create content
-      const response = await fetch(`${process.env.BACKEND_URL}/api/create-content`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          description,
-          target_audience: targetAudience,
-          duration: parseInt(duration),
-          style,
-          services,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to create content')
-      }
-
-      const contentData = await response.json()
-
-      // Save the content data to your database
       const content = await prisma.content.create({
         data: {
           title,
@@ -38,9 +16,14 @@ export default async function handler(req, res) {
           duration: parseInt(duration),
           style,
           services: JSON.stringify(services),
-          contentData: JSON.stringify(contentData),
+          status: 'processing',
+          progress: 0,
+          currentStep: 'Initializing'
         },
       })
+
+      // Start the content creation process in the background
+      startContentCreation(content.id)
 
       res.status(200).json({ id: content.id })
     } catch (error) {
