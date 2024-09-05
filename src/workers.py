@@ -42,7 +42,7 @@ class ContentCreationPipeline:
     def process_input(self, input_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         results = []
         total_entries = len(input_data)
-        progress_tracker = ProgressTracker(total_entries)
+        progress_tracker = ProgressTracker(total_entries * 6)  # 6 steps per entry
 
         with ThreadPoolExecutor() as executor:
             future_to_entry = {executor.submit(self.create_content, entry, index, total_entries, progress_tracker): entry for index, entry in enumerate(input_data, start=1)}
@@ -59,27 +59,35 @@ class ContentCreationPipeline:
 
     def create_content(self, input_data: Dict[str, Any], index: int, total_entries: int, progress_tracker: ProgressTracker) -> Dict[str, Any]:
         self.logger.info(f"Processing entry {index}/{total_entries}: {input_data['name']}")
+        base_step = (index - 1) * 6
         try:
             template_name = input_data.get('template', 'basic')
             prompt = self.prompt_generator.generate_prompt(template_name, input_data)
             generated_content: VideoContent = generate_content_with_openai(prompt)
+            progress_tracker.update(base_step + 1, {"name": input_data['name'], "status": "content generated"})
+
             processed_content = self.process_generated_content(generated_content, input_data)
+            progress_tracker.update(base_step + 2, {"name": input_data['name'], "status": "content processed"})
             
             # Generate additional content based on selected services
             if input_data.get('generate_image'):
                 processed_content['image_url'] = self.generate_image_content(processed_content['description'])
+                progress_tracker.update(base_step + 3, {"name": input_data['name'], "status": "image generated"})
             
             if input_data.get('generate_voice'):
                 processed_content['voice_url'] = self.generate_voice_content(processed_content['audio_narration'])
+                progress_tracker.update(base_step + 4, {"name": input_data['name'], "status": "voice generated"})
             
             if input_data.get('generate_music'):
                 processed_content['music_url'] = self.generate_music_content(input_data)
+                progress_tracker.update(base_step + 5, {"name": input_data['name'], "status": "music generated"})
             
             if input_data.get('generate_video'):
                 processed_content['video_url'] = self.generate_video_content(processed_content)
+                progress_tracker.update(base_step + 6, {"name": input_data['name'], "status": "video generated"})
 
             self.save_to_database(processed_content, input_data['name'])
-            progress_tracker.update(index, {"name": input_data['name'], "status": "completed"})
+            progress_tracker.update(base_step + 6, {"name": input_data['name'], "status": "completed"})
             return processed_content
         except Exception as e:
             self.logger.error(f"Error creating content for {input_data['name']}: {str(e)}", exc_info=True)
@@ -163,6 +171,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 content_pipeline = ContentCreationPipeline()
 
 def content_creation_worker(template_name: str, run_parameters: Dict[str, Any], variable_inputs: List[Dict[str, Any]], app=None) -> List[Dict[str, Any]]:
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
+    
+    try:
+        input_data = [{**run_parameters, **entry, 'template': template_name} for entry in variable_inputs]
+        results = content_pipeline.process_input(input_data)
+        return results
+    except Exception as e:
+        logger.error(f"Error in content creation: {str(e)}", exc_info=True)
+        return [{"error": f"Failed to generate content: {str(e)}"}]
     logger = logging.getLogger(__name__)
     logger.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
     

@@ -65,7 +65,9 @@ const ContentResult = () => {
       {content.generatedContent && (
         <div className="mb-4">
           <h2 className="text-xl font-bold mt-4 mb-2">Generated Content</h2>
-          <h3 className="text-lg font-semibold">Video Content</h3>
+          <h3 className="text-lg font-semibold">{content.generatedContent.video_title}</h3>
+          <p>{content.generatedContent.description}</p>
+          <h3 className="text-lg font-semibold mt-4">Scenes</h3>
           {content.generatedContent.main_scenes.map((scene, index) => (
             <div key={index} className="mb-2">
               <h4 className="font-semibold">Scene {index + 1}</h4>
@@ -73,8 +75,6 @@ const ContentResult = () => {
               <p>Visual Prompt: {scene.visual_prompt}</p>
             </div>
           ))}
-          <h3 className="text-lg font-semibold mt-4">Audio Narration</h3>
-          <p>{content.generatedContent.audio_narration}</p>
         </div>
       )}
 
@@ -88,7 +88,7 @@ const ContentResult = () => {
       {content.generatedVoice && (
         <div className="mb-4">
           <h2 className="text-xl font-bold mt-4 mb-2">Generated Voice</h2>
-          <audio controls src={content.generatedVoice}>
+          <audio controls src={content.generatedVoice} data-testid="voice-audio">
             Your browser does not support the audio element.
           </audio>
         </div>
@@ -97,7 +97,7 @@ const ContentResult = () => {
       {content.generatedMusic && (
         <div className="mb-4">
           <h2 className="text-xl font-bold mt-4 mb-2">Generated Music</h2>
-          <audio controls src={content.generatedMusic}>
+          <audio controls src={content.generatedMusic} data-testid="music-audio">
             Your browser does not support the audio element.
           </audio>
         </div>
@@ -106,9 +106,17 @@ const ContentResult = () => {
       {content.generatedVideo && (
         <div className="mb-4">
           <h2 className="text-xl font-bold mt-4 mb-2">Generated Video</h2>
-          <video controls src={content.generatedVideo} className="max-w-full h-auto">
+          <video controls src={content.generatedVideo} className="max-w-full h-auto" data-testid="video-player">
             Your browser does not support the video element.
           </video>
+        </div>
+      )}
+
+      {content.status === 'error' && (
+        <div className="mt-4 text-red-500">
+          <h2 className="text-xl font-bold">Error occurred during content creation</h2>
+          <p>Error message: {content.errorMessage}</p>
+          <p>Error step: {content.errorStep}</p>
         </div>
       )}
     </Layout>

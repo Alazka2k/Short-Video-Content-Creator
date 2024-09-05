@@ -96,4 +96,101 @@ describe('ContentResult', () => {
       expect(screen.getByText('No content available.')).toBeInTheDocument();
     });
   });
+  
+  test('displays generated content correctly', async () => {
+    const mockContent = {
+      title: 'Test Title',
+      description: 'Test Description',
+      targetAudience: 'Test Audience',
+      duration: 60,
+      style: 'entertaining',
+      services: {
+        contentGeneration: true,
+        imageGeneration: false,
+        voiceGeneration: true,
+        musicGeneration: false,
+        videoGeneration: true,
+      },
+      generatedContent: {
+        video_title: 'Generated Video Title',
+        description: 'Generated video description',
+        main_scenes: [
+          {
+            scene_description: 'Scene 1 description',
+            visual_prompt: 'Scene 1 visual prompt'
+          },
+          {
+            scene_description: 'Scene 2 description',
+            visual_prompt: 'Scene 2 visual prompt'
+          }
+        ]
+      }
+    };
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockContent),
+    });
+
+    render(<ContentResult />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Title')).toBeInTheDocument();
+      expect(screen.getByText('Test Description')).toBeInTheDocument();
+      expect(screen.getByText('Target Audience: Test Audience')).toBeInTheDocument();
+      expect(screen.getByText('Duration: 60 seconds')).toBeInTheDocument();
+      expect(screen.getByText('Style: entertaining')).toBeInTheDocument();
+      expect(screen.getByText('Generated Video Title')).toBeInTheDocument();
+      expect(screen.getByText('Generated video description')).toBeInTheDocument();
+      expect(screen.getByText(/Scene 1 description/)).toBeInTheDocument();
+      expect(screen.getByText(/Scene 1 visual prompt/)).toBeInTheDocument();
+      expect(screen.getByText(/Scene 2 description/)).toBeInTheDocument();
+      expect(screen.getByText(/Scene 2 visual prompt/)).toBeInTheDocument();
+    });
+  });
+
+  test('displays generated assets when available', async () => {
+    const mockContent = {
+      // ... other fields
+      generatedPicture: 'https://example.com/image.jpg',
+      generatedVoice: 'https://example.com/voice.mp3',
+      generatedMusic: 'https://example.com/music.mp3',
+      generatedVideo: 'https://example.com/video.mp4',
+    };
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockContent),
+    });
+
+    render(<ContentResult />);
+
+    await waitFor(() => {
+      expect(screen.getByAltText('Generated visual')).toHaveAttribute('src', 'https://example.com/image.jpg');
+      expect(screen.getByTestId('voice-audio')).toHaveAttribute('src', 'https://example.com/voice.mp3');
+      expect(screen.getByTestId('music-audio')).toHaveAttribute('src', 'https://example.com/music.mp3');
+      expect(screen.getByTestId('video-player')).toHaveAttribute('src', 'https://example.com/video.mp4');
+    });
+  });
+
+  test('displays error state when content has error status', async () => {
+    const mockContent = {
+      status: 'error',
+      errorMessage: 'Content generation failed',
+      errorStep: 'image_generation',
+    };
+
+    global.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockContent),
+    });
+
+    render(<ContentResult />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Error occurred during content creation')).toBeInTheDocument();
+      expect(screen.getByText('Error message: Content generation failed')).toBeInTheDocument();
+      expect(screen.getByText('Error step: image_generation')).toBeInTheDocument();
+    });
+  });
 });

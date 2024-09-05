@@ -6,6 +6,7 @@ from .prompt_generator import PromptGenerator
 from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
 from .models import Content, db
 from .schemas import VideoContent
+from .progress_tracker import ProgressTracker
 
 class ContentCreator:
     def __init__(self, template_file: str, test_input_file: Optional[str] = None):
@@ -26,7 +27,7 @@ class ContentCreator:
             "scene_amount": int(inputs[5])
         }
 
-    def create_content(self, input_data: Dict[str, Any], is_test: bool = False) -> Content:
+    def create_content(self, input_data: Dict[str, Any], is_test: bool = False, progress_tracker: Optional[ProgressTracker] = None) -> Content:
         content = None
         try:
             # Merge input_data with test_input if in test mode
@@ -38,11 +39,20 @@ class ContentCreator:
             # Remove 'services' from merged_input as it's not used in the template
             services = merged_input.pop('services', None)
 
+            if progress_tracker:
+                progress_tracker.update(1, {"status": "Generating content prompt"})
+
             # Generate content prompt
             content_prompt = self.prompt_generator.generate_prompt("video_content", **merged_input)
             
+            if progress_tracker:
+                progress_tracker.update(2, {"status": "Generating content with OpenAI"})
+
             # Generate content using OpenAI
             generated_content: VideoContent = generate_content_with_openai(content_prompt)
+
+            if progress_tracker:
+                progress_tracker.update(3, {"status": "Creating Content object"})
 
             # Create Content object
             content = Content(
@@ -54,8 +64,15 @@ class ContentCreator:
                 services=json.dumps(services) if services else None,
                 generated_content=generated_content.json()
             )
+
+            if progress_tracker:
+                progress_tracker.update(4, {"status": "Saving content to database"})
+
             db.session.add(content)
             db.session.commit()
+
+            if progress_tracker:
+                progress_tracker.update(5, {"status": "Content creation completed"})
 
             return content
 
@@ -81,27 +98,3 @@ def create_content(input_data: Dict[str, Any]) -> Dict[str, Any]:
     creator = ContentCreator("prompt_templates.yaml", "test_input.txt")
     content = creator.create_content(input_data)
     return content.to_dict()
-
-if __name__ == "__main__":
-    # Example usage
-    input_data = {
-        "title": "The Life of Albert Einstein",
-        "description": "A short video about the life and achievements of Albert Einstein",
-        "target_audience": "Science enthusiasts, ages 18-50",
-        "duration": 120,
-        "style": "informative",
-        "services": {
-            "contentGeneration": True,
-            "imageGeneration": True,
-            "voiceGeneration": True,
-            "musicGeneration": False,
-            "videoGeneration": True
-        },
-        "name": "Albert Einstein",
-        "scene_amount": 3,
-        "video_length": 120,
-        "image_style": "realistic"
-    }
-    
-    result = create_content(input_data)
-    print(json.dumps(result, indent=2))

@@ -55,7 +55,8 @@ def create_app(config_name=None):
             db.session.add(content)
             db.session.commit()
 
-            # Pass the configuration to the content_creation_worker
+            # Start the content creation process in the background
+            # You might want to use Celery or a similar task queue for production
             result = content_creation_worker('basic', data, [{'name': data['title']}], app)
             
             if result and isinstance(result[0], dict) and 'error' not in result[0]:
@@ -66,14 +67,8 @@ def create_app(config_name=None):
 
                 return jsonify({
                     'id': content.id,
-                    'title': processed_content['title'],
-                    'description': processed_content['description'],
-                    'scenes': processed_content['scenes'],
-                    'image_url': processed_content.get('image_url'),
-                    'voice_url': processed_content.get('voice_url'),
-                    'music_url': processed_content.get('music_url'),
-                    'video_url': processed_content.get('video_url')
-                }), 200
+                    'message': 'Content creation started successfully'
+                }), 202
             else:
                 error_message = result[0]['error'] if result and isinstance(result[0], dict) else 'Unknown error occurred'
                 return jsonify({'error': error_message}), 500
@@ -82,6 +77,23 @@ def create_app(config_name=None):
             app.logger.error(f"Error in content creation: {str(e)}")
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/content-progress/<int:content_id>', methods=['GET'])
+    def get_content_progress(content_id):
+        content = Content.query.get(content_id)
+        if not content:
+            return jsonify({'error': 'Content not found'}), 404
+
+        # Here you would retrieve the progress from your ProgressTracker
+        # For now, we'll return a mock progress
+        progress = {
+            'current_step': 3,
+            'total_steps': 6,
+            'progress_percentage': 50,
+            'status': 'Processing'
+        }
+
+        return jsonify(progress), 200
 
     @app.route('/api/get-content/<int:content_id>', methods=['GET'])
     def get_content(content_id):

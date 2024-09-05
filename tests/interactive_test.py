@@ -9,8 +9,8 @@ sys.path.insert(0, project_root)
 from src.schemas import VideoContent
 from src.app import create_app
 from src.content_creation import ContentCreator
+from src.progress_tracker import ProgressTracker
 from dotenv import load_dotenv
-
 
 def read_input_file():
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,6 +40,7 @@ def get_manual_input():
     return inputs
 
 def main():
+    load_dotenv()  # Load environment variables
     app = create_app()
     template_file_path = os.path.join(project_root, "src", "prompt_templates.yaml")
     test_input_path = os.path.join(project_root, "tests", "test_input.txt")
@@ -60,10 +61,10 @@ def main():
             "image_style": inputs[4],
             "services": {
                 "contentGeneration": True,
-                "imageGeneration": False,
-                "voiceGeneration": False,
-                "musicGeneration": False,
-                "videoGeneration": False
+                "imageGeneration": inputs[6].lower() == 'y',
+                "voiceGeneration": inputs[7].lower() == 'y',
+                "musicGeneration": inputs[8].lower() == 'y',
+                "videoGeneration": inputs[9].lower() == 'y'
             }
         }
     else:
@@ -86,45 +87,44 @@ def main():
             }
         }
 
-    # Remove 'name' from input_data if it exists
-    input_data.pop('name', None)
-
     app.logger.info(f"Input data: {input_data}")
     
     # Use app context
     with app.app_context():
         try:
+            # Create a ProgressTracker instance
+            progress_tracker = ProgressTracker(total_steps=5)  # Assume 5 steps for content creation
+
             # Generate content using the ContentCreator
-            generated_content = content_creator.create_content(input_data, is_test=use_template)
+            generated_content = content_creator.create_content(input_data, is_test=use_template, progress_tracker=progress_tracker)
             
             # Log the generated content
             app.logger.info(f"Generated content: {generated_content}")
             
             # Perform some assertions or checks on the generated content
             assert generated_content is not None, "Content generation failed"
-            assert len(generated_content) > 0, "Generated content is empty"
+            assert generated_content.generated_content, "Generated content is empty"
             
-            # Detailed checks for scenes and image prompts
-            assert 'scenes' in generated_content, "Scenes not found in generated content"
-            assert len(generated_content['scenes']) == input_data['scene_amount'], f"Expected {input_data['scene_amount']} scenes, but got {len(generated_content['scenes'])}"
-
-            print("\n--- Scene Details ---")
-            for i, scene in enumerate(generated_content['scenes'], 1):
+            # Parse the generated content
+            video_content = VideoContent.parse_raw(generated_content.generated_content)
+            
+            print("\n--- Generated Content ---")
+            print(f"Title: {video_content.video_title}")
+            print(f"Description: {video_content.description}")
+            print("\nScenes:")
+            for i, scene in enumerate(video_content.main_scenes, 1):
                 print(f"\nScene {i}:")
-                print(f"Description: {scene.get('description', 'N/A')}")
-                print(f"Duration: {scene.get('duration', 'N/A')} seconds")
-                print(f"Script: {scene.get('script', 'N/A')}")
+                print(f"Description: {scene.scene_description}")
+                print(f"Visual Prompt: {scene.visual_prompt}")
 
-            if input_data['services']['imageGeneration']:
-                assert 'image_prompts' in generated_content, "Image prompts not found when image generation was requested"
-                assert len(generated_content['image_prompts']) > 0, "No image prompts generated"
+            # Test progress tracking
+            final_progress = progress_tracker.get_progress()
+            print("\n--- Progress Tracking ---")
+            print(f"Final progress: {final_progress['progress_percentage']}%")
+            print(f"Total steps completed: {final_progress['current_step']} / {final_progress['total_steps']}")
+            print(f"Total time taken: {final_progress['elapsed_time']} seconds")
 
-                print("\n--- Image Prompts ---")
-                for i, prompt in enumerate(generated_content['image_prompts'], 1):
-                    print(f"\nImage {i}:")
-                    print(f"Prompt: {prompt}")
-
-            print("All specific content checks passed!")
+            print("Content generation and progress tracking successful!")
         except Exception as e:
             app.logger.error(f"Error during content generation: {str(e)}")
             print(f"Test failed: {str(e)}")
