@@ -12,7 +12,7 @@ The Short Video Content Creator is an automated system designed to generate enga
 - Web-based user interface for content creation and management
 
 ## Current Status
-As of September 04, 2024, the project has achieved the following milestones:
+As of September 05, 2024, the project has achieved the following milestones:
 
 - Implemented core content generation functionality using OpenAI's GPT model
 - Developed a Flask-based backend API for handling content creation requests
@@ -23,23 +23,7 @@ As of September 04, 2024, the project has achieved the following milestones:
 - Developed a robust testing framework including unit tests and an interactive test script
 - Implemented error handling and logging throughout the application
 - Set up CI/CD pipeline with GitHub Actions for automated testing
-
-### Recent Updates
-- Fixed issues in frontend tests, particularly in CreateContent.test.js
-- Improved asynchronous handling in tests
-- Resolved mocking issues for fetch and alert functions
-- Updated test files to use userEvent for more realistic user interactions
-
-### Next Steps
-1. Replace mock implementations with actual AI services for image, voice, music, and video generation
-2. Enhance the frontend UI/UX
-3. Implement user authentication and authorization
-4. Conduct comprehensive end-to-end testing
-5. Optimize performance and implement scalability measures
-6. Resolve remaining issues in CreateContent component tests
-7. Implement progress tracking for long-running processes
-8. Improve multi-entry processing capability
-9. Update documentation to reflect recent changes and new features
+- Implemented progress tracking for long-running processes
 
 ## Project Structure
 
@@ -48,8 +32,6 @@ SHORT-VIDEO-CONTENT-CREATOR/
 ├── .github/
 │   └── workflows/
 │       └── python-tests.yml
-├── .pytest_cache/
-├── .vscode/
 ├── docs/
 │   ├── developer_guide.md
 │   ├── installation_guide.md
@@ -58,25 +40,38 @@ SHORT-VIDEO-CONTENT-CREATOR/
 ├── examples/
 │   └── prompt_generator_examples.py
 ├── frontend/
-│   ├── .next/
 │   ├── __tests__/
 │   ├── components/
-│   ├── node_modules/
+│   │   ├── ContentCreationForm.js
+│   │   ├── Layout.js
+│   │   └── ProgressBar.js
+│   ├── hooks/
+│   │   ├── useForm.js
+│   │   └── useProgress.js
 │   ├── pages/
-│   │   └── api/
-│   ├── public/
+│   │   ├── api/
+│   │   │   ├── content-progress.js
+│   │   │   ├── create-content.js
+│   │   │   ├── create-video.js
+│   │   │   └── get-content.js
+│   │   ├── _app.js
+│   │   ├── _document.js
+│   │   ├── content-result.js
+│   │   ├── create-content.js
+│   │   ├── dashboard.js
+│   │   └── index.js
+│   ├── utils/
+│   │   └── api.js
 │   ├── styles/
 │   └── ... (other frontend files)
 ├── src/
-│   ├── __pycache__/
-│   ├── instance/
 │   ├── __init__.py
 │   ├── app.py
 │   ├── config-dev.yaml
 │   ├── config-loader.py
 │   ├── config-prod.yaml
 │   ├── config.yaml
-│   ├── content-creation.py
+│   ├── content_creation.py
 │   ├── models.py
 │   ├── progress_tracker.py
 │   ├── prompt_generator.py
@@ -98,12 +93,9 @@ SHORT-VIDEO-CONTENT-CREATOR/
 │   ├── test_services.py
 │   └── test_workers.py
 ├── .env
-├── .env.example
 ├── .gitignore
-├── .pre-commit-config.yaml
 ├── LICENSE
 ├── README.md
-├── pytest.ini
 ├── requirements.txt
 └── run_tests.py
 ```
@@ -116,18 +108,41 @@ For detailed information on how to install, use, and contribute to this project,
 - [User Guide](docs/user_guide.md)
 - [Developer Guide](docs/developer_guide.md)
 
-### Quick Start
+### Backend Quick Start
 
 1. Clone the repository and navigate to the project directory.
-2. Set up the backend:
-   a. Create and activate a virtual environment.
-   b. Install backend dependencies with `pip install -r requirements.txt`.
-   c. Set up your environment variables in a `.env` file.
-   d. Run the server with `python src/server.py`.
-3. Set up the frontend:
-   a. Navigate to the `frontend` directory.
-   b. Install frontend dependencies with `npm install`.
-   c. Run the development server with `npm run dev`.
+2. Create and activate a virtual environment.
+3. Install backend dependencies with `pip install -r requirements.txt`.
+4. Set up your environment variables in a `.env` file.
+5. Run the server with `python src/server.py`.
+
+### Frontend Quick Start
+
+The frontend is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+
+1. Navigate to the `frontend` directory.
+2. Install frontend dependencies with `npm install`.
+3. Run the development server:
+
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+
+[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+
+The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+
+This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
 
 ## Running Tests
 
@@ -141,6 +156,21 @@ To run frontend tests:
 cd frontend
 npm test
 ```
+
+## Learn More About Next.js
+
+To learn more about Next.js, take a look at the following resources:
+
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
 
 ## Contributing
 
