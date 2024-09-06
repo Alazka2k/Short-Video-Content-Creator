@@ -1,7 +1,7 @@
 # Short Video Content Creator
 
 ## Project Overview
-The Short Video Content Creator is an automated system designed to generate engaging short videos about notable figures in science and technology. This project leverages various AI services to create content, images, audio, and video, streamlining the process of educational video production.
+The Short Video Content Creator is an automated system designed to generate engaging short videos. This project leverages various AI services to create content, images, audio, and video, streamlining the process of educational video production.
 
 ## Key features include:
 - Automated content generation using OpenAI's GPT model
