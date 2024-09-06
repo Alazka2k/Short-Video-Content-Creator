@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Content {
+  id                Int      @id @default(autoincrement())
+  title             String
+  description       String
+  targetAudience    String?
+  duration          Int
+  style             String
+  services          String   // JSON string
+  status            String   @default("pending")
+  progress          Float    @default(0)
+  currentStep       String?
+  generatedContent  String?  // JSON string
+  generatedPicture  String?
+  generatedVoice    String?
+  generatedMusic    String?
+  generatedVideo    String?
+  createdAt         DateTime @default(now())
+}
