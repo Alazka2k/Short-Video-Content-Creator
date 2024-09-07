@@ -1,40 +1,14 @@
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import json
+from prisma import Prisma
 
-db = SQLAlchemy()
+db = Prisma()
 
-class Content(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-    target_audience = db.Column(db.String(100), nullable=True)
-    duration = db.Column(db.Integer, nullable=False)
-    style = db.Column(db.String(50), nullable=False)
-    services = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    generated_content = db.Column(db.Text, nullable=True)
-    generated_picture = db.Column(db.String(200), nullable=True)
-    generated_voice = db.Column(db.String(200), nullable=True)
-    generated_music = db.Column(db.String(200), nullable=True)
-    generated_video = db.Column(db.String(200), nullable=True)
+# We don't need to define models here anymore, as they're defined in the Prisma schema
+# Instead, we can add helper methods if needed
 
-    def __repr__(self):
-        return f'<Content {self.title}>'
+async def get_content_by_id(content_id: int):
+    return await db.content.find_unique(where={"id": content_id})
 
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'title': self.title,
-            'description': self.description,
-            'target_audience': self.target_audience,
-            'duration': self.duration,
-            'style': self.style,
-            'services': json.loads(self.services),
-            'created_at': self.created_at.isoformat(),
-            'generated_content': self.generated_content,
-            'generated_picture': self.generated_picture,
-            'generated_voice': self.generated_voice,
-            'generated_music': self.generated_music,
-            'generated_video': self.generated_video
-        }
+async def create_content(data):
+    return await db.content.create(data=data)
+
+# Add more helper methods as needed

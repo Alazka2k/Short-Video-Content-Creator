@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 import { Configuration, OpenAIApi } from 'openai';
-import { VideoScript } from '../../types/VideoScript';
+import { VideoScript } from '../../../shared/types/VideoScript';
 
 const prisma = new PrismaClient();
 const configuration = new Configuration({
