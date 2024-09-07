@@ -1,0 +1,31 @@
+# config_dev.yaml
+
+api:
+  claude_ai: "https://api.anthropic.com/v1/messages"
+  black_forest_ai: "https://api.replicate.com/v1/predictions"
+  elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
+  luma_ai: "https://api.lumalabs.ai/v1/images/generations"
+  suna_ai: "https://api.suno.ai/v1/generations"
+
+content_generation:
+  scene_amount: 5  # Reduced for faster development
+  image_style: "Photorealistic, Cinematic"
+  image_details: "--ar 9:16 --style raw --s 100 --v 6"  # Lower quality for faster generation
+  title_details: "--ar 9:16 --style raw --s 20 --v 6"
+  video_length: 30  # Shorter videos for development
+
+paths:
+  input_directory: "dev_input/"
+  output_directory: "dev_output/"
+  logs_directory: "dev_logs/"
+
+logging:
+  level: "DEBUG"  # More verbose logging for development
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "dev_logs/app.log"
+
+database:
+  url: "sqlite:///dev_content_creation.db"
+
+features:
+  use_mock_llm: true  # Use mock LLM for development

@@ -1,50 +1,37 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useForm } from '../hooks/useForm';
 
 const ContentCreationForm = () => {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    targetAudience: '',
-    duration: '',
-    style: 'informative',
-    sceneAmount: 5,
-    services: {
-      contentGeneration: true,
-      imageGeneration: false,
-      voiceGeneration: false,
-      musicGeneration: false,
-      videoGeneration: false,
+  const initialState = {
+    videoSubject: '',
+    generalOptions: {
+      sceneAmount: 10,
+      lengthDescription: '45 seconds',
     },
-  });
-  const [contentId, setContentId] = useState(null);
-  const [progress, setProgress] = useState(null);
+    contentOptions: {
+      generalDescription: 'End of the world scenarios and step-by-step progression, focusing on both global impact and personal stories within the chaos',
+      scriptTone: 'A dramatic, urgent tone that balances between panic and authoritative narration, mimicking a documentary-style voice-over',
+      vocabulary: 'Simple vocabulary, with relatively short sentences. Easy to understand and follow. Include some technical or scientific terms related to the scenario, but explain them in simple terms to maintain accessibility.',
+      pacingStructure: 'Vary the pacing throughout the script to create tension and maintain viewer interest. Use shorter, punchier sentences for intense moments and longer, more descriptive ones for scene-setting.',
+      sensoryThematicElements: 'Incorporate vivid sensory details (sights, sounds, smells, textures) to make the scenes more immersive and engaging. Weave in recurring symbols or motifs throughout the scenes to create a cohesive narrative thread.',
+      characterPerspective: 'Consider introducing a relatable character or perspective to humanize the story and increase emotional investment.',
+    },
+    visualPromptSpecs: {
+      pictureDescription: 'An image which describes the corresponding scene. Add information about the scene and details about the time period',
+      shotDetails: 'Describe also the lighting effects, the time of the day, and the camera angles',
+      imageStyle: 'Photorealistic, cinematic',
+      imageDetails: '--ar 9:16 --style raw --s 500 --v 6',
+    },
+  };
+
+  const { formData, handleInputChange, setFormData } = useForm(initialState);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
-    }));
-  };
-
-  const handleServiceToggle = (service) => {
-    setFormData(prevState => ({
-      ...prevState,
-      services: {
-        ...prevState.services,
-        [service]: !prevState.services[service]
-      }
-    }));
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    setContentId(null);
-    setProgress(null);
 
     try {
       const response = await fetch('/api/create-content', {
@@ -61,7 +48,8 @@ const ContentCreationForm = () => {
       }
 
       const result = await response.json();
-      setContentId(result.id);
+      // Handle successful content creation (e.g., redirect to results page)
+      console.log('Content created:', result);
     } catch (error) {
       console.error('Error creating content:', error);
       setError(error.message || 'An error occurred while creating the content. Please try again.');
@@ -70,158 +58,221 @@ const ContentCreationForm = () => {
     }
   };
 
-  useEffect(() => {
-    let intervalId;
-    if (contentId) {
-      intervalId = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/content-progress/${contentId}`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch progress');
-          }
-          const data = await response.json();
-          setProgress(data);
-          if (data.status === 'completed' || data.status === 'error') {
-            clearInterval(intervalId);
-          }
-        } catch (error) {
-          console.error('Error fetching progress:', error);
-          setError('Failed to fetch progress. Please refresh the page.');
-          clearInterval(intervalId);
-        }
-      }, 2000);
-    }
-    return () => clearInterval(intervalId);
-  }, [contentId]);
-
   return (
-    <div className="max-w-2xl mx-auto mt-8">
-      <h1 className="text-2xl font-bold mb-4">Create Video Content</h1>
-      {error && <p className="text-red-500 mb-4" data-testid="error-message">{error}</p>}
-      <form onSubmit={handleSubmit} className="space-y-4" data-testid="create-content-form">
-        <div>
-          <label htmlFor="title" className="block mb-1">Title</label>
-          <input
-            type="text"
-            id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            required
-            data-testid="title-input"
-          />
-        </div>
-        <div>
-          <label htmlFor="description" className="block mb-1">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            required
-            data-testid="description-input"
-          ></textarea>
-        </div>
-        <div>
-          <label htmlFor="targetAudience" className="block mb-1">Target Audience</label>
-          <input
-            type="text"
-            id="targetAudience"
-            name="targetAudience"
-            value={formData.targetAudience}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            required
-            data-testid="target-audience-input"
-          />
-        </div>
-        <div>
-          <label htmlFor="duration" className="block mb-1">Duration (in seconds)</label>
-          <input
-            type="number"
-            id="duration"
-            name="duration"
-            value={formData.duration}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            required
-            data-testid="duration-input"
-          />
-        </div>
-        <div>
-          <label htmlFor="style" className="block mb-1">Style</label>
-          <select
-            id="style"
-            name="style"
-            value={formData.style}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            data-testid="style-select"
-          >
-            <option value="informative">Informative</option>
-            <option value="entertaining">Entertaining</option>
-            <option value="educational">Educational</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="sceneAmount" className="block mb-1">Number of Scenes</label>
-          <input
-            type="number"
-            id="sceneAmount"
-            name="sceneAmount"
-            value={formData.sceneAmount}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border rounded"
-            required
-            data-testid="scene-amount-input"
-          />
-        </div>
-        <div>
-          <h3 className="font-semibold mb-2">Services</h3>
-          {Object.entries(formData.services).map(([service, isEnabled]) => (
-            <label key={service} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={() => handleServiceToggle(service)}
-                data-testid={`${service.toLowerCase()}-checkbox`}
-              />
-              <span>{service}</span>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="videoSubject" className="block text-sm font-medium text-gray-700">
+          Video Subject
+        </label>
+        <input
+          type="text"
+          id="videoSubject"
+          name="videoSubject"
+          value={formData.videoSubject}
+          onChange={handleInputChange}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+          required
+        />
+      </div>
+
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">General Options</h3>
+        <div className="mt-2 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="sceneAmount" className="block text-sm font-medium text-gray-700">
+              Number of Scenes
             </label>
-          ))}
+            <input
+              type="number"
+              id="sceneAmount"
+              name="generalOptions.sceneAmount"
+              value={formData.generalOptions.sceneAmount}
+              onChange={handleInputChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="lengthDescription" className="block text-sm font-medium text-gray-700">
+              Video Length
+            </label>
+            <input
+              type="text"
+              id="lengthDescription"
+              name="generalOptions.lengthDescription"
+              value={formData.generalOptions.lengthDescription}
+              onChange={handleInputChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
         </div>
-        
+      </div>
+
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">Content Options</h3>
+        <div className="mt-2 space-y-6">
+          <div>
+            <label htmlFor="generalDescription" className="block text-sm font-medium text-gray-700">
+              General Description
+            </label>
+            <textarea
+              id="generalDescription"
+              name="contentOptions.generalDescription"
+              value={formData.contentOptions.generalDescription}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="scriptTone" className="block text-sm font-medium text-gray-700">
+              Script Tone
+            </label>
+            <textarea
+              id="scriptTone"
+              name="contentOptions.scriptTone"
+              value={formData.contentOptions.scriptTone}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="vocabulary" className="block text-sm font-medium text-gray-700">
+              Vocabulary
+            </label>
+            <textarea
+              id="vocabulary"
+              name="contentOptions.vocabulary"
+              value={formData.contentOptions.vocabulary}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="pacingStructure" className="block text-sm font-medium text-gray-700">
+              Pacing Structure
+            </label>
+            <textarea
+              id="pacingStructure"
+              name="contentOptions.pacingStructure"
+              value={formData.contentOptions.pacingStructure}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="sensoryThematicElements" className="block text-sm font-medium text-gray-700">
+              Sensory and Thematic Elements
+            </label>
+            <textarea
+              id="sensoryThematicElements"
+              name="contentOptions.sensoryThematicElements"
+              value={formData.contentOptions.sensoryThematicElements}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="characterPerspective" className="block text-sm font-medium text-gray-700">
+              Character Perspective
+            </label>
+            <textarea
+              id="characterPerspective"
+              name="contentOptions.characterPerspective"
+              value={formData.contentOptions.characterPerspective}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">Visual Prompt Specifications</h3>
+        <div className="mt-2 space-y-6">
+          <div>
+            <label htmlFor="pictureDescription" className="block text-sm font-medium text-gray-700">
+              Picture Description
+            </label>
+            <textarea
+              id="pictureDescription"
+              name="visualPromptSpecs.pictureDescription"
+              value={formData.visualPromptSpecs.pictureDescription}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="shotDetails" className="block text-sm font-medium text-gray-700">
+              Shot Details
+            </label>
+            <textarea
+              id="shotDetails"
+              name="visualPromptSpecs.shotDetails"
+              value={formData.visualPromptSpecs.shotDetails}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="imageStyle" className="block text-sm font-medium text-gray-700">
+              Image Style
+            </label>
+            <input
+              type="text"
+              id="imageStyle"
+              name="visualPromptSpecs.imageStyle"
+              value={formData.visualPromptSpecs.imageStyle}
+              onChange={handleInputChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="imageDetails" className="block text-sm font-medium text-gray-700">
+              Image Details
+            </label>
+            <input
+              type="text"
+              id="imageDetails"
+              name="visualPromptSpecs.imageDetails"
+              value={formData.visualPromptSpecs.imageDetails}
+              onChange={handleInputChange}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      {error && <p className="text-red-500">{error}</p>}
+
+      <div>
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-blue-300"
           disabled={isLoading}
-          data-testid="submit-button"
+          className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           {isLoading ? 'Creating...' : 'Create Content'}
         </button>
-      </form>
-
-      {progress && (
-        <div className="mt-8">
-          <h2 className="text-xl font-bold mb-2">Content Creation Progress</h2>
-          <p>Status: {progress.status}</p>
-          <p>Current Step: {progress.currentStepName}</p>
-          <p>Progress: {progress.progressPercentage}%</p>
-          {progress.status === 'completed' && (
-            <p className="text-green-500 font-semibold">Content creation completed!</p>
-          )}
-          {progress.status === 'error' && (
-            <div>
-              <p className="text-red-500 font-semibold">Error occurred during content creation</p>
-              <p>Error message: {progress.errorMessage}</p>
-              <p>Error step: {progress.errorStep}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      </div>
+    </form>
   );
 };
 

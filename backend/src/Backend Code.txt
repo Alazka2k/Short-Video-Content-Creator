@@ -1,0 +1,976 @@
+app.py
+from flask import Flask, request, jsonify
+from .models import db, Content
+from .workers import content_creation_worker
+from typing import List, Dict, Any
+import os
+import yaml
+from flask_migrate import Migrate
+
+def load_config():
+    # Get the directory of the current script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the path to config.yaml in the src folder
+    config_path = os.path.join(current_dir, 'config.yaml')
+    
+    with open(config_path, 'r') as file:
+        return yaml.safe_load(file)
+
+def create_app(config_name=None):
+    app = Flask(__name__)
+    
+    # Load configuration
+    config = load_config()
+    
+    if config_name == 'testing':
+        app.config['TESTING'] = True
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = config['database']['url']
+    
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config.update(config)  # Add all config values to app.config
+    
+    db.init_app(app)
+    migrate = Migrate(app, db)
+    
+    @app.route('/api/create-content', methods=['POST'])
+    def create_content():
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        required_fields = ['title', 'description', 'target_audience', 'duration', 'style', 'services']
+        if not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        try:
+            content = Content(
+                title=data['title'],
+                description=data['description'],
+                target_audience=data['target_audience'],
+                duration=data['duration'],
+                style=data['style'],
+                services=str(data['services'])
+            )
+            db.session.add(content)
+            db.session.commit()
+
+            # Start the content creation process in the background
+            # You might want to use Celery or a similar task queue for production
+            result = content_creation_worker('basic', data, [{'name': data['title']}], app)
+            
+            if result and isinstance(result[0], dict) and 'error' not in result[0]:
+                processed_content = result[0]
+                # Update the content with the generated data
+                content.generated_content = str(processed_content)
+                db.session.commit()
+
+                return jsonify({
+                    'id': content.id,
+                    'message': 'Content creation started successfully'
+                }), 202
+            else:
+                error_message = result[0]['error'] if result and isinstance(result[0], dict) else 'Unknown error occurred'
+                return jsonify({'error': error_message}), 500
+
+        except Exception as e:
+            app.logger.error(f"Error in content creation: {str(e)}")
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/content-progress/<int:content_id>', methods=['GET'])
+    def get_content_progress(content_id):
+        content = Content.query.get(content_id)
+        if not content:
+            return jsonify({'error': 'Content not found'}), 404
+
+        # Here you would retrieve the progress from your ProgressTracker
+        # For now, we'll return a mock progress
+        progress = {
+            'current_step': 3,
+            'total_steps': 6,
+            'progress_percentage': 50,
+            'status': 'Processing'
+        }
+
+        return jsonify(progress), 200
+
+    @app.route('/api/get-content/<int:content_id>', methods=['GET'])
+    def get_content(content_id):
+        try:
+            content = Content.query.get(content_id)
+            if not content:
+                return jsonify({'error': 'Content not found'}), 404
+
+            return jsonify(content.to_dict()), 200
+        except Exception as e:
+            app.logger.error(f"Error fetching content: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/health', methods=['GET'])
+    def health_check():
+        return jsonify({'status': 'healthy'}), 200
+
+    return app
+
+# This part is optional, but can be useful for running the app directly
+if __name__ == '__main__':
+    app = create_app()
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+config.yaml:
+# config.yaml
+
+# API Endpoints
+api:
+  claude_ai: "https://api.anthropic.com/v1/messages"
+  black_forest_ai: "https://api.replicate.com/v1/predictions"
+  elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
+  luma_ai: "https://api.lumalabs.ai/v1/images/generations"
+  suna_ai: "https://api.suno.ai/v1/generations"
+
+# Default Content Generation Parameters
+content_generation:
+  scene_amount: 10
+  image_style: "Photorealistic, Cinematic"
+  image_details: "--ar 9:16 --style raw --s 200 --v 6"
+  title_details: "--ar 9:16 --style raw --s 40 --v 6"
+  video_length: 60  # in seconds
+
+# File Paths
+paths:
+  input_directory: "input/"
+  output_directory: "output/"
+  logs_directory: "logs/"
+
+# Logging Settings
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/app.log"
+
+# Database Settings
+database:
+  url: "sqlite:///content_creation.db"
+
+# Feature Flags
+features:
+  use_mock_llm: false
+
+config-dev.yaml
+# config_dev.yaml
+
+api:
+  claude_ai: "https://api.anthropic.com/v1/messages"
+  black_forest_ai: "https://api.replicate.com/v1/predictions"
+  elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
+  luma_ai: "https://api.lumalabs.ai/v1/images/generations"
+  suna_ai: "https://api.suno.ai/v1/generations"
+
+content_generation:
+  scene_amount: 5  # Reduced for faster development
+  image_style: "Photorealistic, Cinematic"
+  image_details: "--ar 9:16 --style raw --s 100 --v 6"  # Lower quality for faster generation
+  title_details: "--ar 9:16 --style raw --s 20 --v 6"
+  video_length: 30  # Shorter videos for development
+
+paths:
+  input_directory: "dev_input/"
+  output_directory: "dev_output/"
+  logs_directory: "dev_logs/"
+
+logging:
+  level: "DEBUG"  # More verbose logging for development
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "dev_logs/app.log"
+
+database:
+  url: "sqlite:///dev_content_creation.db"
+
+features:
+  use_mock_llm: true  # Use mock LLM for development
+
+config-loader.py
+import os
+import yaml
+from dotenv import load_dotenv
+
+class ConfigurationError(Exception):
+    pass
+
+def load_config():
+    # Load .env file
+    load_dotenv()
+
+    # Determine which config file to use
+    config_path = os.getenv('CONFIG_PATH', 'config.yaml')
+
+    # Load YAML configuration
+    try:
+        with open(config_path, 'r') as config_file:
+            config = yaml.safe_load(config_file)
+    except FileNotFoundError:
+        raise ConfigurationError(f"Configuration file not found: {config_path}")
+    except yaml.YAMLError as e:
+        raise ConfigurationError(f"Error parsing YAML configuration: {e}")
+
+    # Override with environment variables
+    for section, settings in config.items():
+        if isinstance(settings, dict):
+            for key, value in settings.items():
+                env_var = f"{section.upper()}_{key.upper()}"
+                env_value = os.getenv(env_var)
+                if env_value is not None:
+                    # Convert environment variable to appropriate type
+                    if isinstance(value, bool):
+                        config[section][key] = env_value.lower() in ('true', '1', 'yes')
+                    elif isinstance(value, int):
+                        config[section][key] = int(env_value)
+                    elif isinstance(value, float):
+                        config[section][key] = float(env_value)
+                    else:
+                        config[section][key] = env_value
+
+    # Add API keys from .env
+    config['api_keys'] = {
+        'openai': os.getenv('OPENAI_API_KEY'),
+        'black_forest': os.getenv('BLACK_FOREST_API_KEY'),
+        'elevenlabs': os.getenv('ELEVENLABS_API_KEY'),
+        'luma': os.getenv('LUMA_API_KEY'),
+        'suna': os.getenv('SUNA_API_KEY'),
+    }
+
+    # Validate configuration
+    validate_config(config)
+
+    return config
+
+def validate_config(config):
+    required_sections = ['api', 'content_generation', 'paths', 'logging', 'database', 'features']
+    for section in required_sections:
+        if section not in config:
+            raise ConfigurationError(f"Missing required configuration section: {section}")
+
+    # Check for required API keys
+    required_api_keys = ['anthropic', 'black_forest', 'elevenlabs', 'luma', 'suna']
+    for key in required_api_keys:
+        if not config['api_keys'].get(key):
+            raise ConfigurationError(f"Missing required API key: {key}")
+
+    # Validate content generation settings
+    content_gen = config.get('content_generation', {})
+    if not isinstance(content_gen.get('scene_amount'), int) or content_gen.get('scene_amount') <= 0:
+        raise ConfigurationError("Invalid 'scene_amount' in content_generation")
+
+    # Validate paths
+    for path_key in ['input_directory', 'output_directory', 'logs_directory']:
+        if not config['paths'].get(path_key):
+            raise ConfigurationError(f"Missing required path: {path_key}")
+
+    # Validate logging settings
+    log_config = config.get('logging', {})
+    if log_config.get('level') not in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
+        raise ConfigurationError("Invalid logging level")
+
+    # Validate database URL
+    if not config['database'].get('url'):
+        raise ConfigurationError("Missing database URL")
+
+content_creation.py
+import json
+import os
+import logging
+from typing import Dict, Any, Optional
+from .prompt_generator import PromptGenerator
+from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
+from .models import Content, db
+from .schemas import VideoContent
+from .progress_tracker import ProgressTracker
+
+class ContentCreator:
+    def __init__(self, template_file: str, test_input_file: Optional[str] = None):
+        self.logger = logging.getLogger(__name__)
+        self.prompt_generator = PromptGenerator(template_file)
+        self.test_input = self.load_test_input(test_input_file) if test_input_file else None
+
+    def load_test_input(self, test_input_file: str) -> Dict[str, Any]:
+        with open(test_input_file, 'r') as file:
+            lines = file.readlines()
+        inputs = [line.strip() for line in lines]
+        return {
+            "name": inputs[0],
+            "description": inputs[1],
+            "target_audience": inputs[2],
+            "video_length": int(inputs[3]),
+            "image_style": inputs[4],
+            "scene_amount": int(inputs[5])
+        }
+
+    def create_content(self, input_data: Dict[str, Any], is_test: bool = False, progress_tracker: Optional[ProgressTracker] = None) -> Content:
+        content = None
+        try:
+            # Merge input_data with test_input if in test mode
+            if is_test and self.test_input:
+                merged_input = {**self.test_input, **input_data}
+            else:
+                merged_input = input_data
+
+            # Remove 'services' from merged_input as it's not used in the template
+            services = merged_input.pop('services', None)
+
+            if progress_tracker:
+                progress_tracker.update(1, {"status": "Generating content prompt"})
+
+            # Generate content prompt
+            content_prompt = self.prompt_generator.generate_prompt("video_content", **merged_input)
+            
+            if progress_tracker:
+                progress_tracker.update(2, {"status": "Generating content with OpenAI"})
+
+            # Generate content using OpenAI
+            generated_content: VideoContent = generate_content_with_openai(content_prompt)
+
+            if progress_tracker:
+                progress_tracker.update(3, {"status": "Creating Content object"})
+
+            # Create Content object
+            content = Content(
+                title=generated_content.video_title,
+                description=generated_content.description,
+                target_audience=merged_input['target_audience'],
+                duration=merged_input['duration'],
+                style=merged_input['style'],
+                services=json.dumps(services) if services else None,
+                generated_content=generated_content.json()
+            )
+
+            if progress_tracker:
+                progress_tracker.update(4, {"status": "Saving content to database"})
+
+            db.session.add(content)
+            db.session.commit()
+
+            if progress_tracker:
+                progress_tracker.update(5, {"status": "Content creation completed"})
+
+            return content
+
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Error decoding JSON: {str(e)}")
+            raise Exception(f"Error decoding JSON: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Error in content creation pipeline: {str(e)}")
+            raise
+
+    def save_debug_info(self, title: str, data: Dict[str, Any]):
+        debug_folder = f"debug/content/{title}"
+        os.makedirs(debug_folder, exist_ok=True)
+        
+        with open(f"{debug_folder}/generated_content.json", "w") as f:
+            json.dump(data, f, indent=2)
+
+# Make sure to export the class at the end of the file
+__all__ = ['ContentCreator']
+
+# Helper function to create content (optional, based on the original code)
+def create_content(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    creator = ContentCreator("prompt_templates.yaml", "test_input.txt")
+    content = creator.create_content(input_data)
+    return content.to_dict()
+
+models.py
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+import json
+
+db = SQLAlchemy()
+
+class Content(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    target_audience = db.Column(db.String(100), nullable=True)
+    duration = db.Column(db.Integer, nullable=False)
+    style = db.Column(db.String(50), nullable=False)
+    services = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    generated_content = db.Column(db.Text, nullable=True)
+    generated_picture = db.Column(db.String(200), nullable=True)
+    generated_voice = db.Column(db.String(200), nullable=True)
+    generated_music = db.Column(db.String(200), nullable=True)
+    generated_video = db.Column(db.String(200), nullable=True)
+
+    def __repr__(self):
+        return f'<Content {self.title}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'target_audience': self.target_audience,
+            'duration': self.duration,
+            'style': self.style,
+            'services': json.loads(self.services),
+            'created_at': self.created_at.isoformat(),
+            'generated_content': self.generated_content,
+            'generated_picture': self.generated_picture,
+            'generated_voice': self.generated_voice,
+            'generated_music': self.generated_music,
+            'generated_video': self.generated_video
+        }
+
+progress_tracker.py
+import time
+from typing import Dict, Any
+
+class ProgressTracker:
+    def __init__(self, total_steps: int):
+        self.total_steps = total_steps
+        self.current_step = 0
+        self.start_time = time.time()
+        self.step_times: Dict[int, float] = {}
+
+    def update(self, step: int, info: Dict[str, Any] = None):
+        self.current_step = step
+        self.step_times[step] = time.time()
+        if info:
+            print(f"Step {step}/{self.total_steps} completed. Info: {info}")
+        else:
+            print(f"Step {step}/{self.total_steps} completed.")
+
+    def get_progress(self) -> Dict[str, Any]:
+        elapsed_time = time.time() - self.start_time
+        progress = (self.current_step / self.total_steps) * 100
+        return {
+            "current_step": self.current_step,
+            "total_steps": self.total_steps,
+            "progress_percentage": round(progress, 2),
+            "elapsed_time": round(elapsed_time, 2),
+            "estimated_time_remaining": self._estimate_time_remaining(),
+        }
+
+    def _estimate_time_remaining(self) -> float:
+        if self.current_step == 0:
+            return 0
+        avg_time_per_step = (time.time() - self.start_time) / self.current_step
+        remaining_steps = self.total_steps - self.current_step
+        return round(avg_time_per_step * remaining_steps, 2)
+
+
+prompt_generator.py
+# src/prompt_generator.py
+
+import yaml
+import logging
+from string import Template
+from typing import Dict, Any, List
+import re
+
+class PromptGenerator:
+    def __init__(self, template_file: str):
+        """
+        Initialize the PromptGenerator with a template file.
+        
+        :param template_file: Path to the YAML file containing prompt templates.
+        """
+        self.logger = logging.getLogger(__name__)
+        self.logger.info(f"Loading templates from: {template_file}")
+        with open(template_file, 'r') as file:
+            self.templates = yaml.safe_load(file)
+        self.logger.info(f"Loaded templates: {list(self.templates.keys())}")
+
+    def _load_components(self) -> Dict[str, str]:
+        """
+        Load reusable components for prompt templates.
+        
+        :return: Dictionary of component names and their content.
+        """
+        # This is a placeholder implementation. In a real-world scenario,
+        # components might be loaded from a file or database.
+        return {
+            "greeting": "Hello, {name}!",
+            "closing": "Thank you for using our service.",
+        }
+
+    def generate_prompt(self, template_name: str, **kwargs) -> str:
+        """
+        Generate a prompt using a specified template and variables.
+        
+        :param template_name: Name of the template to use.
+        :param kwargs: Dictionary of variables to fill in the template.
+        :return: Generated prompt string.
+        :raises: ValueError if the template is not found.
+        """
+        self.logger.info(f"Generating prompt for template: {template_name}")
+        if template_name not in self.templates:
+            raise ValueError(f"Template '{template_name}' not found. Available templates: {list(self.templates.keys())}")
+        template = self.templates[template_name]['template']
+        
+        # Filter kwargs to only include keys that are in the template
+        filtered_kwargs = {k: v for k, v in kwargs.items() if f"{{{k}}}" in template}
+        
+        # Log any unused kwargs
+        unused_kwargs = set(kwargs.keys()) - set(filtered_kwargs.keys())
+        if unused_kwargs:
+            self.logger.warning(f"Unused kwargs for template '{template_name}': {unused_kwargs}")
+        
+        return template.format(**filtered_kwargs)
+
+    def _expand_components(self, template: str) -> str:
+        """
+        Expand component placeholders in a template.
+        
+        :param template: Template string potentially containing component placeholders.
+        :return: Template string with component placeholders expanded.
+        """
+        for component_name, component_template in self.components.items():
+            placeholder = f"{{component:{component_name}}}"
+            if placeholder in template:
+                template = template.replace(placeholder, component_template)
+        return template
+
+    def validate_prompt(self, prompt: str, template_name: str) -> bool:
+        """
+        Validate a generated prompt.
+        
+        :param prompt: The prompt to validate.
+        :param template_name: Name of the template used to generate the prompt.
+        :return: True if the prompt is valid, False otherwise.
+        """
+        if not prompt.strip():
+            self.logger.warning("Generated prompt is empty")
+            return False
+        
+        if re.search(r'\{[^}]+\}', prompt):
+            self.logger.warning(f"Prompt for '{template_name}' contains unfilled placeholders")
+            return False
+        
+        max_length = self.templates[template_name].get('max_length', 1000)
+        if len(prompt) > max_length:
+            self.logger.warning(f"Prompt for '{template_name}' exceeds maximum length of {max_length} characters")
+            return False
+        
+        return True
+
+    def get_required_variables(self, template_name: str) -> List[str]:
+        """
+        Get the list of required variables for a template.
+        
+        :param template_name: Name of the template.
+        :return: List of variable names required by the template.
+        :raises: ValueError if the template is not found.
+        """
+        if template_name not in self.templates:
+            raise ValueError(f"Template '{template_name}' not found")
+        
+        template = self.templates[template_name]['template']
+        return re.findall(r'\$(\w+)', template)
+
+    def add_template(self, name: str, template: str, max_length: int = 1000):
+        """
+        Add a new template to the PromptGenerator.
+        
+        :param name: Name of the new template.
+        :param template: Template string.
+        :param max_length: Maximum allowed length for prompts generated from this template.
+        """
+        self.templates[name] = {
+            'template': template,
+            'max_length': max_length
+        }
+        self.logger.info(f"Added new template: {name}")
+
+    def remove_template(self, name: str):
+        """
+        Remove a template from the PromptGenerator.
+        
+        :param name: Name of the template to remove.
+        """
+        if name in self.templates:
+            del self.templates[name]
+            self.logger.info(f"Removed template: {name}")
+        else:
+            self.logger.warning(f"Attempted to remove non-existent template: {name}")
+
+prompt_templates.yaml
+# src/prompt_templates.yaml
+
+video_content:
+  template: |
+    Create a short video content about {title} with the following specifications:
+    - Number of scenes: {scene_amount}
+    - Video length: {video_length} seconds
+    - Style: {style}
+    - Target audience: {target_audience}
+
+    Please structure your response as a JSON object with the following format:
+    {{
+      "video_title": "A catchy, informative title for the video",
+      "description": "A brief overview of the video content (2-3 sentences)",
+      "main_scenes": [
+        {{
+          "scene_description": "A brief description of what happens in the scene",
+          "visual_prompt": "A detailed description for image generation"
+        }},
+        // ... repeat for each scene
+      ]
+    }}
+
+    Remember to keep the content engaging, factual, and suitable for the target audience: {target_audience}.
+  max_length: 2000
+
+scene_audio_script:
+  template: |
+    {component:greeting}
+    Create an audio script for the following scene about $name:
+    
+    Scene description: $scene_description
+    
+    The script should be approximately $audio_length seconds when read aloud.
+    
+    Include:
+    1. Clear and concise narration of the scene
+    2. Any relevant facts or information about $name related to this scene
+    3. Engaging language suitable for a video narration
+    
+    The tone should be $tone and the language should be suitable for $audience.
+    {component:closing}
+  max_length: 1500
+
+image_generation:
+  template: |
+    Create a detailed visual description for an image of $name with the following specifications:
+    - Style: $image_style
+    - Scene: $scene_description
+    - Key elements to include: $key_elements
+
+    The description should be suitable for an AI image generation tool.
+    Focus on visual details, composition, lighting, and atmosphere.
+  max_length: 1000
+
+Schemas.py
+from pydantic import BaseModel
+from typing import List
+
+class Scene(BaseModel):
+    scene_description: str
+    visual_prompt: str
+
+class VideoContent(BaseModel):
+    video_title: str
+    description: str
+    main_scenes: List[Scene]
+
+Server.py
+# server.py
+from flask import Flask
+from app import create_app
+
+if __name__ == '__main__':
+    app = create_app()
+    print("Server is running. Access it at http://localhost:5000")
+    print("Press CTRL+C to stop the server.")
+    app.run(debug=True)
+
+Services.py
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+import logging
+from typing import Dict, Any, List
+from pydantic import BaseModel
+
+# Load environment variables
+load_dotenv()
+
+# Use os.getenv to get the API key
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+class Scene(BaseModel):
+    scene_description: str
+    visual_prompt: str
+
+class VideoContent(BaseModel):
+    video_title: str
+    description: str
+    main_scenes: List[Scene]
+
+class OpenAIService:
+    def __init__(self, api_key):
+        self.client = OpenAI(api_key=api_key)
+
+    def generate_content(self, prompt):
+        response = self.client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            messages=[
+                {"role": "system", "content": "You are a creative video content creator."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={
+                "type": "json_object",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "scenes": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "scene_number": {"type": "integer"},
+                                    "description": {"type": "string"},
+                                    "duration": {"type": "number"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            temperature=0.7,
+        )
+        # ... rest of the method
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Initialize the OpenAI service
+openai_service = OpenAIService(api_key=OPENAI_API_KEY)
+
+def generate_content_with_openai(prompt: str) -> Dict[str, Any]:
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",  # Updated to the new model
+            messages=[
+                {"role": "system", "content": "You are a creative video content creator. Please provide your response in JSON format."},
+                {"role": "user", "content": f"{prompt}\n\nPlease format your response as a JSON object."}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+        return VideoContent.parse_raw(response.choices[0].message.content)
+    except Exception as e:
+        logging.error(f"Error in OpenAI API call: {str(e)}")
+        raise Exception(f"Error in OpenAI API call: {str(e)}")
+
+# Mock implementations for new services
+def generate_image(prompt: str) -> str:
+    logging.info(f"Generating image with prompt: {prompt[:50]}...")
+    return "http://example.com/generated_image.jpg"
+
+def generate_voice(script: str) -> str:
+    logging.info(f"Generating voice for script: {script[:50]}...")
+    return "http://example.com/generated_voice.mp3"
+
+def generate_music(prompt: str) -> str:
+    logging.info(f"Generating music with prompt: {prompt[:50]}...")
+    return "http://example.com/generated_music.mp3"
+
+def generate_video(video_data: Dict[str, Any]) -> str:
+    logging.info(f"Generating video with data: {str(video_data)[:100]}...")
+    return "http://example.com/generated_video.mp4"
+
+# Ensure all functions are available when imported
+__all__ = ['generate_content_with_openai', 'generate_image', 'generate_voice', 'generate_music', 'generate_video']
+
+Workers.py
+import logging
+from flask import current_app
+from .models import db, Content
+from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video, VideoContent
+from typing import Dict, Any, List
+import os
+from dotenv import load_dotenv
+import csv
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .progress_tracker import ProgressTracker
+
+# Load environment variables
+load_dotenv()
+
+class PromptGenerator:
+    def __init__(self):
+        self.templates = {
+            "basic": "Create a short video script about {name}. The video should have {scene_amount} scenes.",
+            "detailed": "Create a detailed video script about {name}. The video should have {scene_amount} scenes. "
+                        "Include information about their background, achievements, and legacy. "
+                        "Each scene should be vivid and engaging.",
+            "educational": "Create an educational video script about {name} suitable for {target_audience}. "
+                           "The video should have {scene_amount} scenes and focus on key facts and interesting details.",
+        }
+
+    def generate_prompt(self, template_name: str, variables: Dict[str, Any]) -> str:
+        if template_name not in self.templates:
+            raise ValueError(f"Unknown template: {template_name}")
+        
+        template = self.templates[template_name]
+        return template.format(**variables)
+
+    def add_template(self, name: str, template: str):
+        self.templates[name] = template
+
+class ContentCreationPipeline:
+    def __init__(self):
+        self.prompt_generator = PromptGenerator()
+        self.logger = logging.getLogger(__name__)
+
+    def process_input(self, input_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        results = []
+        total_entries = len(input_data)
+        progress_tracker = ProgressTracker(total_entries * 6)  # 6 steps per entry
+
+        with ThreadPoolExecutor() as executor:
+            future_to_entry = {executor.submit(self.create_content, entry, index, total_entries, progress_tracker): entry for index, entry in enumerate(input_data, start=1)}
+            for future in as_completed(future_to_entry):
+                entry = future_to_entry[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    self.logger.error(f"Error processing entry: {entry['name']} - {str(e)}", exc_info=True)
+                    results.append({"error": str(e), "name": entry['name']})
+
+        return results
+
+    def create_content(self, input_data: Dict[str, Any], index: int, total_entries: int, progress_tracker: ProgressTracker) -> Dict[str, Any]:
+        self.logger.info(f"Processing entry {index}/{total_entries}: {input_data['name']}")
+        base_step = (index - 1) * 6
+        try:
+            template_name = input_data.get('template', 'basic')
+            prompt = self.prompt_generator.generate_prompt(template_name, input_data)
+            generated_content: VideoContent = generate_content_with_openai(prompt)
+            progress_tracker.update(base_step + 1, {"name": input_data['name'], "status": "content generated"})
+
+            processed_content = self.process_generated_content(generated_content, input_data)
+            progress_tracker.update(base_step + 2, {"name": input_data['name'], "status": "content processed"})
+            
+            # Generate additional content based on selected services
+            if input_data.get('generate_image'):
+                processed_content['image_url'] = self.generate_image_content(processed_content['description'])
+                progress_tracker.update(base_step + 3, {"name": input_data['name'], "status": "image generated"})
+            
+            if input_data.get('generate_voice'):
+                processed_content['voice_url'] = self.generate_voice_content(processed_content['audio_narration'])
+                progress_tracker.update(base_step + 4, {"name": input_data['name'], "status": "voice generated"})
+            
+            if input_data.get('generate_music'):
+                processed_content['music_url'] = self.generate_music_content(input_data)
+                progress_tracker.update(base_step + 5, {"name": input_data['name'], "status": "music generated"})
+            
+            if input_data.get('generate_video'):
+                processed_content['video_url'] = self.generate_video_content(processed_content)
+                progress_tracker.update(base_step + 6, {"name": input_data['name'], "status": "video generated"})
+
+            self.save_to_database(processed_content, input_data['name'])
+            progress_tracker.update(base_step + 6, {"name": input_data['name'], "status": "completed"})
+            return processed_content
+        except Exception as e:
+            self.logger.error(f"Error creating content for {input_data['name']}: {str(e)}", exc_info=True)
+            raise
+
+    def process_generated_content(self, generated_content: VideoContent, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            'name': input_data['name'],
+            'title': generated_content.video_title,
+            'description': generated_content.description,
+            'scenes': [scene.dict() for scene in generated_content.main_scenes],
+            'audio_narration': '\n'.join([scene.scene_description for scene in generated_content.main_scenes])
+        }
+
+    def generate_image_content(self, description: str) -> str:
+        try:
+            return generate_image(description)
+        except Exception as e:
+            self.logger.error(f"Error generating image: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_voice_content(self, script: str) -> str:
+        try:
+            return generate_voice(script)
+        except Exception as e:
+            self.logger.error(f"Error generating voice: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_music_content(self, input_data: Dict[str, Any]) -> str:
+        try:
+            return generate_music(f"Create {input_data.get('style', 'background')} music for a video about {input_data['name']}")
+        except Exception as e:
+            self.logger.error(f"Error generating music: {str(e)}", exc_info=True)
+            return ""
+
+    def generate_video_content(self, processed_content: Dict[str, Any]) -> str:
+        try:
+            video_data = {
+                "script": processed_content['audio_narration'],
+                "image_url": processed_content.get('image_url'),
+                "voice_url": processed_content.get('voice_url'),
+                "music_url": processed_content.get('music_url')
+            }
+            return generate_video(video_data)
+        except Exception as e:
+            self.logger.error(f"Error generating video: {str(e)}", exc_info=True)
+            return ""
+
+    def save_to_database(self, processed_content: Dict[str, Any], name: str):
+        try:
+            content = Content(
+                name=name,
+                title=processed_content['title'],
+                description=processed_content['description'],
+                content=json.dumps(processed_content)
+            )
+            db.session.add(content)
+            db.session.commit()
+            self.logger.info(f"Saved content to database for {name}")
+        except Exception as e:
+            self.logger.error(f"Error saving to database: {str(e)}", exc_info=True)
+            db.session.rollback()
+            raise
+
+    def load_input_from_csv(self, file_path: str) -> List[Dict[str, Any]]:
+        input_data = []
+        try:
+            with open(file_path, 'r') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    input_data.append(row)
+            return input_data
+        except Exception as e:
+            self.logger.error(f"Error loading input from CSV: {str(e)}", exc_info=True)
+            raise
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Initialize the pipeline
+content_pipeline = ContentCreationPipeline()
+
+def content_creation_worker(template_name: str, run_parameters: Dict[str, Any], variable_inputs: List[Dict[str, Any]], app=None) -> List[Dict[str, Any]]:
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
+    
+    try:
+        input_data = [{**run_parameters, **entry, 'template': template_name} for entry in variable_inputs]
+        results = content_pipeline.process_input(input_data)
+        return results
+    except Exception as e:
+        logger.error(f"Error in content creation: {str(e)}", exc_info=True)
+        return [{"error": f"Failed to generate content: {str(e)}"}]
+    logger = logging.getLogger(__name__)
+    logger.info(f"Starting content creation for {len(variable_inputs)} entries using template: {template_name}")
+    
+    try:
+        input_data = [{**run_parameters, **entry, 'template': template_name} for entry in variable_inputs]
+        results = content_pipeline.process_input(input_data)
+        return results
+    except Exception as e:
+        logger.error(f"Error in content creation: {str(e)}", exc_info=True)
+        return [{"error": f"Failed to generate content: {str(e)}"}]

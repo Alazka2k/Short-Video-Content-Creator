@@ -8,7 +8,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(os.path.dirname(current_dir), 'src')
 sys.path.insert(0, src_dir)
 
-from src.workers import content_creation_worker
+from backend.src.content_pipeline import content_creation_worker
 from src.app import create_app, db
 from src.services import VideoContent, Scene
 

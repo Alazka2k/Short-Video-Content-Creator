@@ -1,0 +1,31 @@
+# config_prod.yaml
+
+api:
+  claude_ai: "https://api.anthropic.com/v1/messages"
+  black_forest_ai: "https://api.replicate.com/v1/predictions"
+  elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
+  luma_ai: "https://api.lumalabs.ai/v1/images/generations"
+  suna_ai: "https://api.suno.ai/v1/generations"
+
+content_generation:
+  scene_amount: 10
+  image_style: "Photorealistic, Cinematic"
+  image_details: "--ar 9:16 --style raw --s 200 --v 6"
+  title_details: "--ar 9:16 --style raw --s 40 --v 6"
+  video_length: 60
+
+paths:
+  input_directory: "/var/www/short-video-creator/input/"
+  output_directory: "/var/www/short-video-creator/output/"
+  logs_directory: "/var/log/short-video-creator/"
+
+logging:
+  level: "WARNING"  # Only log warnings and errors in production
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "/var/log/short-video-creator/app.log"
+
+database:
+  url: "postgresql://user:password@localhost/content_creation"
+
+features:
+  use_mock_llm: false
