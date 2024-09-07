@@ -81,4 +81,4 @@ def validate_config(config):
 
     # Validate database URL
     if not config['database'].get('url'):
-        raise ConfigurationError("Missing da
+        raise ConfigurationError("Missing database URL")

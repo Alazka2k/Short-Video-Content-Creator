@@ -1,53 +1,148 @@
-import { PrismaClient } from '@prisma/client'
-import { startContentCreation } from '../../lib/contentCreation'
+import { NextApiRequest, NextApiResponse } from 'next';
+import { PrismaClient } from '@prisma/client';
+import { Configuration, OpenAIApi } from 'openai';
+import { VideoScript } from '../../types/VideoScript';
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
+const configuration = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+const openai = new OpenAIApi(configuration);
 
-export default async function handler(req, res) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST'])
-    return res.status(405).json({ error: `Method ${req.method} Not Allowed` })
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { title, description, targetAudience, duration, style, sceneAmount, services } = req.body
+    const { 
+      title, 
+      videoSubject, 
+      generalOptions, 
+      contentOptions, 
+      visualPromptOptions 
+    } = req.body;
 
-    // Input validation
-    if (!title || !description || !targetAudience || !duration || !style || !sceneAmount) {
-      return res.status(400).json({ error: 'Missing required fields' })
+    // Validate input
+    if (!title || !videoSubject || !generalOptions || !contentOptions || !visualPromptOptions) {
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (isNaN(parseInt(duration)) || isNaN(parseInt(sceneAmount))) {
-      return res.status(400).json({ error: 'Duration and sceneAmount must be numbers' })
+    // Generate the prompt
+    const initialPrompt = generatePrompt(title, videoSubject, generalOptions, contentOptions, visualPromptOptions);
+
+    // Call OpenAI API
+    const response = await openai.createChatCompletion({
+      model: "gpt-4o-2024-08-06",
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: initialPrompt }
+      ],
+      functions: [
+        {
+          name: "generate_video_script",
+          description: "Generate a structured video script",
+          parameters: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              description: { type: "string" },
+              hashtags: { type: "array", items: { type: "string" } },
+              opening_scene: { 
+                type: "object",
+                properties: {
+                  description: { type: "string" },
+                  visual_prompt: { type: "string" }
+                }
+              },
+              scenes: { 
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    description: { type: "string" },
+                    visual_prompt: { type: "string" }
+                  }
+                }
+              },
+              closing_scene: { 
+                type: "object",
+                properties: {
+                  description: { type: "string" },
+                  visual_prompt: { type: "string" }
+                }
+              }
+            },
+            required: ["title", "description", "hashtags", "opening_scene", "scenes", "closing_scene"]
+          }
+        }
+      ],
+      function_call: { name: "generate_video_script" }
+    });
+
+    const functionCall = response.data.choices[0].message?.function_call;
+    if (!functionCall || !functionCall.arguments) {
+      throw new Error('Failed to generate video script');
     }
 
-    const content = await prisma.content.create({
+    const videoScript: VideoScript = JSON.parse(functionCall.arguments);
+
+    // Save to database
+    const savedContent = await prisma.content.create({
       data: {
-        title,
-        description,
-        targetAudience,
-        duration: parseInt(duration),
-        style,
-        sceneAmount: parseInt(sceneAmount),
-        services: JSON.stringify(services),
-        status: 'processing',
-        progressPercentage: 0,
-        currentStep: 'Initializing'
+        title: videoScript.title,
+        videoSubject,
+        generatedContent: JSON.stringify(videoScript),
+        generalOptions: {
+          create: generalOptions
+        },
+        contentOptions: {
+          create: contentOptions
+        },
+        visualPromptOptions: {
+          create: visualPromptOptions
+        },
+        scenes: {
+          create: [
+            { type: 'OPENING', description: videoScript.opening_scene.description },
+            ...videoScript.scenes.map((scene, index) => ({
+              type: 'MAIN',
+              description: scene.description
+            })),
+            { type: 'CLOSING', description: videoScript.closing_scene.description }
+          ]
+        },
+        visualPrompts: {
+          create: [
+            { type: 'OPENING', description: videoScript.opening_scene.visual_prompt, sceneNumber: 0 },
+            ...videoScript.scenes.map((scene, index) => ({
+              type: 'MAIN',
+              description: scene.visual_prompt,
+              sceneNumber: index + 1
+            })),
+            { type: 'CLOSING', description: videoScript.closing_scene.visual_prompt, sceneNumber: videoScript.scenes.length + 1 }
+          ]
+        },
       },
-    })
+      include: {
+        generalOptions: true,
+        contentOptions: true,
+        visualPromptOptions: true,
+        scenes: true,
+        visualPrompts: true,
+      },
+    });
 
-    // Start the content creation process in the background
-    startContentCreation(content.id).catch(error => {
-      console.error('Error in content creation process:', error)
-      // You might want to implement a notification system here to alert admins of failed processes
-    })
-
-    res.status(200).json({ id: content.id })
+    res.status(200).json({ id: savedContent.id, message: 'Content created successfully', content: savedContent });
   } catch (error) {
-    console.error('Error creating content:', error)
-    if (error.code === 'P2002') {
-      return res.status(400).json({ error: 'A content with this title already exists' })
-    }
-    res.status(500).json({ error: 'An unexpected error occurred while creating the content' })
+    console.error('Error in content creation:', error);
+    res.status(500).json({ error: 'An error occurred while creating the content' });
   }
+}
+
+function generatePrompt(title: string, videoSubject: string, generalOptions: any, contentOptions: any, visualPromptOptions: any): string {
+  // Implement the prompt generation logic here
+  // Combine all the options into a structured prompt
+  // ...
+  return `Generate a video script about "${title}" with the following specifications...`;
 }

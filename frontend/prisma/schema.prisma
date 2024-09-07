@@ -11,20 +11,88 @@ datasource db {
 }
 
 model Content {
-  id                Int      @id @default(autoincrement())
-  title             String
-  description       String
-  targetAudience    String?
-  duration          Int
+  id               Int                 @id @default(autoincrement())
+  title            String
+  videoSubject     String
+  status           String              @default("pending")
+  progress         Float               @default(0)
+  currentStep      String?
+  generatedContent String?             // JSON string
+  generatedPicture String?
+  generatedVoice   String?
+  generatedMusic   String?
+  generatedVideo   String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  generalOptions   GeneralOptions?
+  contentOptions   ContentOptions?
+  visualPromptOptions VisualPromptOptions?
+  scenes           Scene[]
+  audioPrompts     AudioPrompt[]
+  visualPrompts    VisualPrompt[]
+  musicPrompt      MusicPrompt?
+}
+
+model GeneralOptions {
+  id             Int     @id @default(autoincrement())
+  style          String
+  description    String
+  sceneAmount    Int
+  duration       Int
+  tone           String
+  vocabulary     String
+  targetAudience String
+  content        Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId      Int     @unique
+}
+
+model ContentOptions {
+  id          Int     @id @default(autoincrement())
+  pacing      String
+  description String
+  content     Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   Int     @unique
+}
+
+model VisualPromptOptions {
+  id                Int     @id @default(autoincrement())
+  pictureDescription String
   style             String
-  services          String   // JSON string
-  status            String   @default("pending")
-  progress          Float    @default(0)
-  currentStep       String?
-  generatedContent  String?  // JSON string
-  generatedPicture  String?
-  generatedVoice    String?
-  generatedMusic    String?
-  generatedVideo    String?
-  createdAt         DateTime @default(now())
+  imageDetails      String
+  shotDetails       String
+  content           Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId         Int     @unique
+}
+
+model Scene {
+  id          Int     @id @default(autoincrement())
+  type        String
+  description String
+  content     Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   Int
+}
+
+model AudioPrompt {
+  id          Int     @id @default(autoincrement())
+  type        String
+  sceneNumber Int
+  description String
+  content     Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   Int
+}
+
+model VisualPrompt {
+  id          Int     @id @default(autoincrement())
+  type        String
+  sceneNumber Int
+  description String
+  content     Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   Int
+}
+
+model MusicPrompt {
+  id          Int     @id @default(autoincrement())
+  description String
+  content     Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  contentId   Int     @unique
 }
