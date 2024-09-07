@@ -1,5 +1,4 @@
 import json
-import os
 import logging
 from typing import Dict, Any, Optional, List
 from .prompt_generator import PromptGenerator
@@ -11,59 +10,73 @@ from .progress_tracker import ProgressTracker
 prisma = Prisma()
 
 class ContentCreator:
-    def __init__(self, template_file: str, test_input_file: Optional[str] = None):
+    def __init__(self, template_file: str):
         self.logger = logging.getLogger(__name__)
         self.prompt_generator = PromptGenerator(template_file)
-        self.test_input = self.load_test_input(test_input_file) if test_input_file else None
 
-    def load_test_input(self, test_input_file: str) -> Dict[str, Any]:
-        with open(test_input_file, 'r') as file:
-            lines = file.readlines()
-        inputs = [line.strip() for line in lines]
-        return {
-            "name": inputs[0],
-            "description": inputs[1],
-            "target_audience": inputs[2],
-            "video_length": int(inputs[3]),
-            "image_style": inputs[4],
-            "scene_amount": int(inputs[5])
-        }
-
-    async def create_content(self, input_data: ContentCreationRequest, is_test: bool = False, progress_tracker: Optional[ProgressTracker] = None) -> Dict[str, Any]:
+    async def create_content(self, input_data: ContentCreationRequest, progress_tracker: Optional[ProgressTracker] = None) -> Dict[str, Any]:
         try:
-            # Merge input_data with test_input if in test mode
-            if is_test and self.test_input:
-                merged_input = {**self.test_input, **input_data.dict()}
-            else:
-                merged_input = input_data.dict()
-
             if progress_tracker:
                 progress_tracker.update(1, {"status": "Generating content prompt"})
 
-            # Generate content prompt
-            content_prompt = self.prompt_generator.generate_prompt("video_content", **merged_input)
+            content_prompt = self.prompt_generator.generate_prompt("video_content", **input_data.dict())
             
             if progress_tracker:
                 progress_tracker.update(2, {"status": "Generating content with OpenAI"})
 
-            # Generate content using OpenAI
             generated_content: VideoContent = await generate_content_with_openai(content_prompt)
 
             if progress_tracker:
                 progress_tracker.update(3, {"status": "Creating Content object"})
 
-            # Create Content object using Prisma
             content = await prisma.content.create(
                 data={
                     "title": generated_content.video_title,
-                    "description": generated_content.description,
-                    "targetAudience": merged_input['targetAudience'],
-                    "duration": merged_input['duration'],
-                    "style": merged_input['style'],
-                    "services": json.dumps(merged_input['services']),
-                    "generatedContent": generated_content.json(),
+                    "videoSubject": input_data.videoSubject,
                     "status": "pending",
-                    "progress": 0
+                    "progress": 0,
+                    "generatedContent": json.dumps(generated_content.dict()),
+                    "generalOptions": {
+                        "create": {
+                            "style": input_data.style,
+                            "description": input_data.description,
+                            "sceneAmount": input_data.sceneAmount,
+                            "duration": input_data.duration,
+                            "tone": input_data.tone,
+                            "vocabulary": input_data.vocabulary,
+                            "targetAudience": input_data.targetAudience
+                        }
+                    },
+                    "contentOptions": {
+                        "create": {
+                            "pacing": input_data.pacing,
+                            "description": input_data.contentDescription
+                        }
+                    },
+                    "visualPromptOptions": {
+                        "create": {
+                            "pictureDescription": input_data.pictureDescription,
+                            "style": input_data.imageStyle,
+                            "imageDetails": input_data.imageDetails,
+                            "shotDetails": input_data.shotDetails
+                        }
+                    },
+                    "scenes": {
+                        "create": [{"type": "main", "description": scene.scene_description} for scene in generated_content.main_scenes]
+                    },
+                    "audioPrompts": {
+                        "create": [{"type": "narration", "sceneNumber": i+1, "description": scene.scene_description} 
+                                   for i, scene in enumerate(generated_content.main_scenes)]
+                    },
+                    "visualPrompts": {
+                        "create": [{"type": "scene", "sceneNumber": i+1, "description": scene.visual_description} 
+                                   for i, scene in enumerate(generated_content.main_scenes)]
+                    },
+                    "musicPrompt": {
+                        "create": {
+                            "description": f"Create {input_data.style} music for a video about {input_data.videoSubject}"
+                        }
+                    }
                 }
             )
 
@@ -72,28 +85,18 @@ class ContentCreator:
 
             return content
 
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Error decoding JSON: {str(e)}")
-            raise Exception(f"Error decoding JSON: {str(e)}")
         except Exception as e:
             self.logger.error(f"Error in content creation pipeline: {str(e)}")
             raise
 
-    def save_debug_info(self, title: str, data: Dict[str, Any]):
-        debug_folder = f"debug/content/{title}"
-        os.makedirs(debug_folder, exist_ok=True)
-        
-        with open(f"{debug_folder}/generated_content.json", "w") as f:
-            json.dump(data, f, indent=2)
-
-    async def process_batch(self, input_data_list: List[ContentCreationRequest], is_test: bool = False) -> List[Dict[str, Any]]:
+    async def process_batch(self, input_data_list: List[ContentCreationRequest]) -> List[Dict[str, Any]]:
         results = []
         total_entries = len(input_data_list)
         progress_tracker = ProgressTracker(total_entries * 5)  # 5 steps per entry
 
         for index, input_data in enumerate(input_data_list, start=1):
             try:
-                content = await self.create_content(input_data, is_test, progress_tracker)
+                content = await self.create_content(input_data, progress_tracker)
                 results.append(content)
             except Exception as e:
                 self.logger.error(f"Error processing entry {index}: {str(e)}")
@@ -101,10 +104,6 @@ class ContentCreator:
 
         return results
 
-# Make sure to export the class at the end of the file
-__all__ = ['ContentCreator']
-
-# Helper function to create content (now supports batch processing)
-async def create_content(input_data: List[ContentCreationRequest], is_test: bool = False) -> List[Dict[str, Any]]:
-    creator = ContentCreator("prompt_templates.yaml", "test_input.txt" if is_test else None)
-    return await creator.process_batch(input_data, is_test)
+async def create_content(input_data: List[ContentCreationRequest]) -> List[Dict[str, Any]]:
+    creator = ContentCreator("prompt_templates.yaml")
+    return await creator.process_batch(input_data)

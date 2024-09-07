@@ -19,9 +19,16 @@ def create_app(config_name=None):
     app = Flask(__name__)
     CORS(app)
     
-    # Load configuration
     config = load_config()
     
+    @app.before_request
+    async def before_request():
+        await prisma.connect()
+
+    @app.teardown_appcontext
+    async def shutdown_session(exception=None):
+        await prisma.disconnect()
+
     @app.route('/api/create-content', methods=['POST'])
     async def create_content_endpoint():
         data = request.json
@@ -45,46 +52,4 @@ def create_app(config_name=None):
     async def get_content_progress(content_id):
         content = await prisma.content.find_unique(where={"id": content_id})
         if not content:
-            return jsonify({'error': 'Content not found'}), 404
-
-        progress = {
-            'current_step': content.currentStep,
-            'total_steps': 6,  # Assuming 6 steps as before
-            'progress_percentage': content.progress,
-            'status': content.status
-        }
-
-        return jsonify(progress), 200
-
-    @app.route('/api/get-content/<int:content_id>', methods=['GET'])
-    async def get_content(content_id):
-        try:
-            content = await prisma.content.find_unique(
-                where={"id": content_id},
-                include={
-                    "generalOptions": True,
-                    "contentOptions": True,
-                    "visualPromptOptions": True,
-                    "scenes": True,
-                    "audioPrompts": True,
-                    "visualPrompts": True,
-                    "musicPrompt": True
-                }
-            )
-            if not content:
-                return jsonify({'error': 'Content not found'}), 404
-
-            return jsonify(ContentCreationResponse(**content).dict()), 200
-        except Exception as e:
-            app.logger.error(f"Error fetching content: {str(e)}")
-            return jsonify({'error': str(e)}), 500
-
-    @app.route('/health', methods=['GET'])
-    def health_check():
-        return jsonify({'status': 'healthy'}), 200
-
-    return app
-
-if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True)
+            return jsonify({'error': '

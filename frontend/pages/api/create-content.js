@@ -93,6 +93,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         title: videoScript.title,
         videoSubject,
         generatedContent: JSON.stringify(videoScript),
+        status: 'pending',
+        progress: 0,
         generalOptions: {
           create: generalOptions
         },
@@ -137,6 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error('Error in content creation:', error);
     res.status(500).json({ error: 'An error occurred while creating the content' });
+  } finally {
+    await prisma.$disconnect();
   }
 }
 

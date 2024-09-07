@@ -9,22 +9,6 @@ from .progress_tracker import ProgressTracker
 
 prisma = Prisma()
 
-class PromptGenerator:
-    def __init__(self, template_file: str):
-        # Load templates from file
-        self.templates = self.load_templates(template_file)
-
-    def load_templates(self, template_file: str) -> Dict[str, str]:
-        # Implement loading templates from file
-        pass
-
-    def generate_prompt(self, template_name: str, variables: Dict[str, Any]) -> str:
-        if template_name not in self.templates:
-            raise ValueError(f"Unknown template: {template_name}")
-        
-        template = self.templates[template_name]
-        return template.format(**variables)
-
 class ContentCreationPipeline:
     def __init__(self, template_file: str):
         self.prompt_generator = PromptGenerator(template_file)
@@ -43,70 +27,112 @@ class ContentCreationPipeline:
                     result = await future.result()
                     results.append(result)
                 except Exception as e:
-                    self.logger.error(f"Error processing entry: {entry.title} - {str(e)}", exc_info=True)
-                    results.append({"error": str(e), "title": entry.title})
+                    self.logger.error(f"Error processing entry: {entry.videoSubject} - {str(e)}", exc_info=True)
+                    results.append({"error": str(e), "videoSubject": entry.videoSubject})
 
         return results
 
     async def create_content(self, input_data: ContentCreationRequest, index: int, total_entries: int, progress_tracker: ProgressTracker) -> Dict[str, Any]:
-        self.logger.info(f"Processing entry {index}/{total_entries}: {input_data.title}")
+        self.logger.info(f"Processing entry {index}/{total_entries}: {input_data.videoSubject}")
         base_step = (index - 1) * 6
         try:
             prompt = self.prompt_generator.generate_prompt("video_content", input_data.dict())
             generated_content: VideoContent = await generate_content_with_openai(prompt)
-            progress_tracker.update(base_step + 1, {"title": input_data.title, "status": "content generated"})
+            progress_tracker.update(base_step + 1, {"videoSubject": input_data.videoSubject, "status": "content generated"})
 
-            processed_content = self.process_generated_content(generated_content, input_data)
-            progress_tracker.update(base_step + 2, {"title": input_data.title, "status": "content processed"})
+            content = await self.save_to_database(generated_content, input_data)
+            progress_tracker.update(base_step + 2, {"videoSubject": input_data.videoSubject, "status": "content saved"})
             
-            # Generate additional content based on selected services
-            if input_data.services.get('generate_image'):
-                processed_content['image_url'] = await generate_image(processed_content['description'])
-                progress_tracker.update(base_step + 3, {"title": input_data.title, "status": "image generated"})
+            if input_data.generalOptions.services.get('generate_image'):
+                image_url = await generate_image(generated_content.description)
+                await prisma.content.update(
+                    where={"id": content.id},
+                    data={"generatedPicture": image_url}
+                )
+                progress_tracker.update(base_step + 3, {"videoSubject": input_data.videoSubject, "status": "image generated"})
             
-            if input_data.services.get('generate_voice'):
-                processed_content['voice_url'] = await generate_voice(processed_content['audio_narration'])
-                progress_tracker.update(base_step + 4, {"title": input_data.title, "status": "voice generated"})
+            if input_data.generalOptions.services.get('generate_voice'):
+                voice_url = await generate_voice('\n'.join([scene.scene_description for scene in generated_content.main_scenes]))
+                await prisma.content.update(
+                    where={"id": content.id},
+                    data={"generatedVoice": voice_url}
+                )
+                progress_tracker.update(base_step + 4, {"videoSubject": input_data.videoSubject, "status": "voice generated"})
             
-            if input_data.services.get('generate_music'):
-                processed_content['music_url'] = await generate_music(f"Create {input_data.style} music for a video about {input_data.title}")
-                progress_tracker.update(base_step + 5, {"title": input_data.title, "status": "music generated"})
+            if input_data.generalOptions.services.get('generate_music'):
+                music_url = await generate_music(f"Create {input_data.generalOptions.style} music for a video about {input_data.videoSubject}")
+                await prisma.content.update(
+                    where={"id": content.id},
+                    data={"generatedMusic": music_url}
+                )
+                progress_tracker.update(base_step + 5, {"videoSubject": input_data.videoSubject, "status": "music generated"})
             
-            if input_data.services.get('generate_video'):
-                processed_content['video_url'] = await generate_video(processed_content)
-                progress_tracker.update(base_step + 6, {"title": input_data.title, "status": "video generated"})
+            if input_data.generalOptions.services.get('generate_video'):
+                video_url = await generate_video(content.id)
+                await prisma.content.update(
+                    where={"id": content.id},
+                    data={"generatedVideo": video_url, "status": "completed", "progress": 100}
+                )
+                progress_tracker.update(base_step + 6, {"videoSubject": input_data.videoSubject, "status": "video generated"})
 
-            content = await self.save_to_database(processed_content, input_data)
-            progress_tracker.update(base_step + 6, {"title": input_data.title, "status": "completed"})
             return content
         except Exception as e:
-            self.logger.error(f"Error creating content for {input_data.title}: {str(e)}", exc_info=True)
+            self.logger.error(f"Error creating content for {input_data.videoSubject}: {str(e)}", exc_info=True)
             raise
 
-    def process_generated_content(self, generated_content: VideoContent, input_data: ContentCreationRequest) -> Dict[str, Any]:
-        return {
-            'title': generated_content.video_title,
-            'description': generated_content.description,
-            'scenes': [scene.dict() for scene in generated_content.main_scenes],
-            'audio_narration': '\n'.join([scene.scene_description for scene in generated_content.main_scenes])
-        }
-
-    async def save_to_database(self, processed_content: Dict[str, Any], input_data: ContentCreationRequest) -> Dict[str, Any]:
+    async def save_to_database(self, generated_content: VideoContent, input_data: ContentCreationRequest) -> Dict[str, Any]:
         try:
             content = await prisma.content.create(
                 data={
-                    "title": processed_content['title'],
-                    "description": processed_content['description'],
-                    "targetAudience": input_data.targetAudience,
-                    "duration": input_data.duration,
-                    "style": input_data.style,
-                    "services": json.dumps(input_data.services),
-                    "generatedContent": json.dumps(processed_content),
-                    "status": "completed",
-                    "progress": 100
+                    "title": generated_content.video_title,
+                    "videoSubject": input_data.videoSubject,
+                    "status": "pending",
+                    "progress": 0,
+                    "generatedContent": json.dumps(generated_content.dict()),
+                    "generalOptions": {
+                        "create": {
+                            "style": input_data.generalOptions.style,
+                            "description": input_data.generalOptions.description,
+                            "sceneAmount": input_data.generalOptions.sceneAmount,
+                            "duration": input_data.generalOptions.duration,
+                            "tone": input_data.generalOptions.tone,
+                            "vocabulary": input_data.generalOptions.vocabulary,
+                            "targetAudience": input_data.generalOptions.targetAudience
+                        }
+                    },
+                    "contentOptions": {
+                        "create": {
+                            "pacing": input_data.contentOptions.pacing,
+                            "description": input_data.contentOptions.description
+                        }
+                    },
+                    "visualPromptOptions": {
+                        "create": {
+                            "pictureDescription": input_data.visualPromptOptions.pictureDescription,
+                            "style": input_data.visualPromptOptions.style,
+                            "imageDetails": input_data.visualPromptOptions.imageDetails,
+                            "shotDetails": input_data.visualPromptOptions.shotDetails
+                        }
+                    },
+                    "scenes": {
+                        "create": [{"type": "main", "description": scene.scene_description} for scene in generated_content.main_scenes]
+                    },
+                    "audioPrompts": {
+                        "create": [{"type": "narration", "sceneNumber": i+1, "description": scene.scene_description} 
+                                   for i, scene in enumerate(generated_content.main_scenes)]
+                    },
+                    "visualPrompts": {
+                        "create": [{"type": "scene", "sceneNumber": i+1, "description": scene.visual_description} 
+                                   for i, scene in enumerate(generated_content.main_scenes)]
+                    },
+                    "musicPrompt": {
+                        "create": {
+                            "description": f"Create {input_data.generalOptions.style} music for a video about {input_data.videoSubject}"
+                        }
+                    }
                 }
             )
-            self.logger.info(f"Saved content to database for {input_data.title}")
+            self.logger.info(f"Saved content to database for {input_data.videoSubject}")
             return content
         except Exception as e:
             self.logger.error(f"Error saving to database: {str(e)}", exc_info=True)

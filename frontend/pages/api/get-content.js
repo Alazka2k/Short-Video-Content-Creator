@@ -13,6 +13,15 @@ export default async function handler(req, res) {
 
       const content = await prisma.content.findUnique({
         where: { id: parseInt(id) },
+        include: {
+          generalOptions: true,
+          contentOptions: true,
+          visualPromptOptions: true,
+          scenes: true,
+          visualPrompts: true,
+          audioPrompts: true,
+          musicPrompt: true
+        }
       })
 
       if (!content) {
@@ -21,7 +30,6 @@ export default async function handler(req, res) {
 
       // Parse JSON strings back into objects
       try {
-        content.services = JSON.parse(content.services)
         content.generatedContent = content.generatedContent ? JSON.parse(content.generatedContent) : null
       } catch (parseError) {
         console.error('Error parsing JSON:', parseError)
