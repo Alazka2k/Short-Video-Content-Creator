@@ -1,7 +1,7 @@
 import React from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
-import ContentCreationForm from '../components/forms/ContentCreationForm';
+import ContentCreationForm from '../components/ContentCreationForm';
 import { createContent } from '../lib/contentCreation';
 
 const CreateContent = () => {
