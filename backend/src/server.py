@@ -1,4 +1,4 @@
-# server.py
+# backend/src/server.py
 from flask import Flask
 from app import create_app
 

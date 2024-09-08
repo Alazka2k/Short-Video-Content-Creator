@@ -1,13 +1,15 @@
+# backend/src/content_creation.py
+
 import json
 import logging
 from typing import Dict, Any, Optional, List
-from .prompt_generator import PromptGenerator
-from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
-from prisma import Prisma
+from backend.src.prompt_generator import PromptGenerator
+from backend.src.services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
 from shared.types.ContentCreation import ContentCreationRequest, VideoContent
-from .progress_tracker import ProgressTracker
+from backend.src.progress_tracker import ProgressTracker
+from backend.src.prisma_client import init_prisma
 
-prisma = Prisma()
+prisma = init_prisma()
 
 class ContentCreator:
     def __init__(self, template_file: str):
@@ -38,27 +40,27 @@ class ContentCreator:
                     "generatedContent": json.dumps(generated_content.dict()),
                     "generalOptions": {
                         "create": {
-                            "style": input_data.style,
-                            "description": input_data.description,
-                            "sceneAmount": input_data.sceneAmount,
-                            "duration": input_data.duration,
-                            "tone": input_data.tone,
-                            "vocabulary": input_data.vocabulary,
-                            "targetAudience": input_data.targetAudience
+                            "style": input_data.generalOptions.style,
+                            "description": input_data.generalOptions.description,
+                            "sceneAmount": input_data.generalOptions.sceneAmount,
+                            "duration": input_data.generalOptions.duration,
+                            "tone": input_data.generalOptions.tone,
+                            "vocabulary": input_data.generalOptions.vocabulary,
+                            "targetAudience": input_data.generalOptions.targetAudience
                         }
                     },
                     "contentOptions": {
                         "create": {
-                            "pacing": input_data.pacing,
-                            "description": input_data.contentDescription
+                            "pacing": input_data.contentOptions.pacing,
+                            "description": input_data.contentOptions.description
                         }
                     },
                     "visualPromptOptions": {
                         "create": {
-                            "pictureDescription": input_data.pictureDescription,
-                            "style": input_data.imageStyle,
-                            "imageDetails": input_data.imageDetails,
-                            "shotDetails": input_data.shotDetails
+                            "pictureDescription": input_data.visualPromptOptions.pictureDescription,
+                            "style": input_data.visualPromptOptions.style,
+                            "imageDetails": input_data.visualPromptOptions.imageDetails,
+                            "shotDetails": input_data.visualPromptOptions.shotDetails
                         }
                     },
                     "scenes": {
@@ -69,12 +71,12 @@ class ContentCreator:
                                    for i, scene in enumerate(generated_content.main_scenes)]
                     },
                     "visualPrompts": {
-                        "create": [{"type": "scene", "sceneNumber": i+1, "description": scene.visual_description} 
+                        "create": [{"type": "scene", "sceneNumber": i+1, "description": scene.visual_prompt} 
                                    for i, scene in enumerate(generated_content.main_scenes)]
                     },
                     "musicPrompt": {
                         "create": {
-                            "description": f"Create {input_data.style} music for a video about {input_data.videoSubject}"
+                            "description": f"Create {input_data.generalOptions.style} music for a video about {input_data.videoSubject}"
                         }
                     }
                 }

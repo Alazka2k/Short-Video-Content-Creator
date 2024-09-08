@@ -18,6 +18,11 @@ export default async function handler(req, res) {
           status: true,
           progress: true,
           currentStep: true,
+          errorMessage: true,
+          generatedPicture: true,
+          generatedVoice: true,
+          generatedMusic: true,
+          generatedVideo: true,
         },
       })
 

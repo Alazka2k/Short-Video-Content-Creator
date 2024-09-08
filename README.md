@@ -32,75 +32,125 @@ SHORT-VIDEO-CONTENT-CREATOR/
 ├── .github/
 │   └── workflows/
 │       └── python-tests.yml
+├── .pytest_cache/
+├── .vscode/
+├── backend/
+│   ├── archive/
+│   ├── src/
+│   │   ├── __pycache__/
+│   │   ├── __init__.py
+│   │   ├── app.py
+│   │   ├── Backend Code.txt
+│   │   ├── config-loader.py
+│   │   ├── config.yaml
+│   │   ├── content_creation.py
+│   │   ├── content_pipeline.py
+│   │   ├── models.py
+│   │   ├── prisma_client.py
+│   │   ├── progress_tracker.py
+│   │   ├── prompt_generator.py
+│   │   ├── prompt_templates.yaml
+│   │   ├── server.py
+│   │   └── services.py
+│   ├── unit_tests/
+│   │   ├── __pycache__/
+│   │   ├── conftest.py
+│   │   ├── test_app.py
+│   │   ├── test_content_creation.py
+│   │   ├── test_openai_connection.py
+│   │   ├── test_openai_service.py
+│   │   ├── test_prisma_import.py
+│   │   ├── test_prompt_generator.py
+│   │   └── test_services.py
+│   ├── .env
+│   └── requirements.txt
 ├── docs/
 │   ├── developer_guide.md
 │   ├── installation_guide.md
 │   ├── prompt_generator_docs.md
 │   └── user_guide.md
+├── examples/
+│   └── prompt_generator_examples.py
 ├── frontend/
 │   ├── __tests__/
+│   ├── .next/
+│   ├── .swc/
 │   ├── components/
-│   │   ├── ContentCreationForm.js  # Form for creating new content
-│   │   ├── Layout.js               # Main layout component
-│   │   └── ProgressBar.js          # Progress indicator for content creation
+│   │   ├── ContentCreationForm.js
+│   │   ├── Layout.js
+│   │   ├── Navbar.js
+│   │   ├── ParameterTooltip.js
+│   │   ├── ProgressBar.js
+│   │   └── ResultDashboard.js
 │   ├── hooks/
-│   │   ├── useForm.js              # Custom hook for form handling
-│   │   └── useProgress.js          # Custom hook for progress tracking
+│   │   ├── useForm.js
+│   │   └── useProgress.js
+│   ├── lib/
+│   │   └── contentCreation.js
+│   ├── node_modules/
 │   ├── pages/
 │   │   ├── api/
-│   │   │   ├── content-progress.js # API route for content creation progress
-│   │   │   ├── create-content.js   # API route for content creation
-│   │   │   ├── create-video.js     # API route for video creation
-│   │   │   └── get-content.js      # API route for fetching content
-│   │   ├── _app.js                 # Next.js App component
-│   │   ├── _document.js            # Next.js Document component
-│   │   ├── content-result.js       # Page for displaying content creation results
-│   │   ├── create-content.js       # Page for content creation form
-│   │   ├── dashboard.js            # User dashboard page
-│   │   └── index.js                # Home page
+│   │   │   ├── content-progress.js
+│   │   │   ├── create-content.js
+│   │   │   ├── create-video.js
+│   │   │   └── get-content.js
+│   │   ├── _app.js
+│   │   ├── _document.js
+│   │   ├── content-result.js
+│   │   ├── create-content.js
+│   │   ├── dashboard.js
+│   │   └── index.js
+│   ├── public/
+│   ├── styles/
 │   ├── utils/
-│   │   └── api.js                  # Utility functions for API calls
-│   └── styles/                     # CSS and styling files
-├── backend/
-│   ├── src/
-│   │   ├── __init__.py
-│   │   ├── app.py                  # Main Flask application
-│   │   ├── config-loader.py        # Configuration loading utility
-│   │   ├── config.yaml             # Main configuration file
-│   │   ├── content_creation.py     # Content creation logic
-│   │   ├── content_pipeline.py     # Content processing pipeline
-│   │   ├── models.py               # Database models (may be removed with Prisma)
-│   │   ├── prisma.py               # Prisma ORM configuration
-│   │   ├── progress_tracker.py     # Progress tracking utility
-│   │   ├── prompt_generator.py     # Prompt generation for AI models
-│   │   ├── prompt_templates.yaml   # Templates for AI prompts
-│   │   ├── server.py               # Server startup script
-│   │   └── services.py             # External services integration
-│   ├── unit_tests/
-│   │   ├── __init__.py
-│   │   ├── conftest.py             # Test configuration
-│   │   ├── test_app.py             # Tests for main application
-│   │   ├── test_content_creation.py# Tests for content creation
-│   │   ├── test_models.py          # Tests for database models
-│   │   ├── test_openai_connection.py # Tests for OpenAI API connection
-│   │   ├── test_openai_service.py  # Tests for OpenAI service
-│   │   ├── test_prompt_generator.py# Tests for prompt generation
-│   │   ├── test_services.py        # Tests for external services
-│   │   └── test_workers.py         # Tests for background workers
-│   ├── .env                        # Environment variables
-│   └── requirements.txt            # Python dependencies
+│   │   ├── api.js
+│   │   └── randomParameter.js
+│   ├── .babelrc
+│   ├── next.config.js
+│   ├── package.json
+│   └── tsconfig.json
+├── instance/
+│   └── content_creation.db
+├── migrations/
+├── public/
 ├── shared/
 │   ├── prisma/
-│   │   ├── migrations/             # Database migration files
-│   │   ├── dev.db                  # Development SQLite database
-│   │   └── schema.prisma           # Prisma schema file
+│   │   ├── migrations/
+│   │   ├── dev.db
+│   │   ├── dev.db-journal
+│   │   └── schema.prisma
 │   └── types/
-│       └── ContentCreation.ts      # Shared TypeScript types
+│       ├── ContentCreation.py
+│       └── ContentCreation.ts
 ├── .gitignore
 ├── LICENSE
 ├── README.md
-└── run_tests.py                    # Script to run all tests
+└── run_tests.py
 ```
+
+### Key components:
+
+.github/workflows/: Contains CI/CD configuration for GitHub Actions.
+backend/: Flask backend application.
+
+src/: Main backend source code.
+unit_tests/: Backend unit tests.
+
+
+docs/: Project documentation.
+examples/: Example scripts and usage.
+frontend/: Next.js frontend application.
+
+components/: React components.
+hooks/: Custom React hooks.
+pages/: Next.js pages and API routes.
+utils/: Utility functions.
+
+
+shared/: Shared resources between frontend and backend.
+
+prisma/: Prisma ORM configuration and database.
+types/: Shared type definitions.
 
 ## Getting Started
 

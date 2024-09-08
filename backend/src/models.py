@@ -1,14 +1,16 @@
-from prisma import Prisma
+from pydantic import BaseModel
+from typing import List
+from backend.src.prisma_client import init_prisma
 
-db = Prisma()
+prisma = init_prisma()
 
-# We don't need to define models here anymore, as they're defined in the Prisma schema
-# Instead, we can add helper methods if needed
+# Hier sollte kein 'db = prisma()' sein, da prisma bereits initialisiert ist
 
-async def get_content_by_id(content_id: int):
-    return await db.content.find_unique(where={"id": content_id})
+class Scene(BaseModel):
+    scene_description: str
+    visual_prompt: str
 
-async def create_content(data):
-    return await db.content.create(data=data)
-
-# Add more helper methods as needed
+class VideoContent(BaseModel):
+    video_title: str
+    description: str
+    main_scenes: List[Scene]

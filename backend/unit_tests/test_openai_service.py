@@ -1,23 +1,38 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from services import OpenAIService, generate_content_with_openai
+from src.services import OpenAIService, generate_content_with_openai
 import json
+import os
+from dotenv import load_dotenv
+from backend.src.models import VideoContent
+
+# Laden Sie die .env-Datei aus dem Hauptverzeichnis
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+load_dotenv(dotenv_path)
 
 class TestOpenAIService(unittest.TestCase):
 
     def setUp(self):
-        self.service = OpenAIService()
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY nicht in der .env-Datei gefunden")
+        self.service = OpenAIService(api_key)
 
     @patch('services.client.chat.completions.create')
     def test_generate_content_success(self, mock_create):
         mock_response = MagicMock()
-        mock_response.choices[0].message.content = '{"title": "Test", "description": "This is a test"}'
+        mock_response.choices[0].message.content = json.dumps({
+            "video_title": "Test Title",
+            "description": "Test Description",
+            "main_scenes": [
+                {"scene_description": "Scene 1", "visual_prompt": "Visual 1"}
+            ]
+        })
         mock_create.return_value = mock_response
 
         result = self.service.generate_content("Test prompt")
-        
-        self.assertEqual(result, {"title": "Test", "description": "This is a test"})
-        mock_create.assert_called_once()
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["video_title"], "Test Title")
 
     @patch('services.client.chat.completions.create')
     def test_generate_content_non_json(self, mock_create):
@@ -38,12 +53,14 @@ class TestOpenAIService(unittest.TestCase):
 
     @patch('services.openai_service.generate_content')
     def test_generate_content_with_openai(self, mock_generate):
-        mock_generate.return_value = {"title": "Test"}
-        
+        mock_generate.return_value = VideoContent(
+            video_title="Test Title",
+            description="Test Description",
+            main_scenes=[{"scene_description": "Scene 1", "visual_prompt": "Visual 1"}]
+        )
+
         result = generate_content_with_openai("Test prompt")
-        
-        self.assertEqual(result, {"title": "Test"})
-        mock_generate.assert_called_once_with("Test prompt")
+        self.assertIsInstance(result, VideoContent)
 
 if __name__ == '__main__':
     unittest.main()

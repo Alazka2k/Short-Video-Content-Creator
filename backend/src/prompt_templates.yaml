@@ -1,12 +1,23 @@
-# src/prompt_templates.yaml
+# backend/src/prompt_templates.yaml
 
 video_content:
   template: |
-    Create a short video content about {title} with the following specifications:
-    - Number of scenes: {scene_amount}
-    - Video length: {video_length} seconds
-    - Style: {style}
-    - Target audience: {target_audience}
+    Create a {generalOptions_style} video about {videoSubject} with the following specifications:
+    - Number of scenes: {generalOptions_sceneAmount}
+    - Video length: {generalOptions_duration} seconds
+    - Tone: {generalOptions_tone}
+    - Vocabulary level: {generalOptions_vocabulary}
+    - Target audience: {generalOptions_targetAudience}
+    
+    General description: {generalOptions_description}
+    
+    Content pacing: {contentOptions_pacing}
+    Content structure: {contentOptions_description}
+    
+    Visual style: {visualPromptOptions_style}
+    Visual description: {visualPromptOptions_pictureDescription}
+    Image details: {visualPromptOptions_imageDetails}
+    Shot details: {visualPromptOptions_shotDetails}
 
     Please structure your response as a JSON object with the following format:
     {{
@@ -21,34 +32,25 @@ video_content:
       ]
     }}
 
-    Remember to keep the content engaging, factual, and suitable for the target audience: {target_audience}.
-  max_length: 2000
-
-scene_audio_script:
-  template: |
-    {component:greeting}
-    Create an audio script for the following scene about $name:
-    
-    Scene description: $scene_description
-    
-    The script should be approximately $audio_length seconds when read aloud.
-    
-    Include:
-    1. Clear and concise narration of the scene
-    2. Any relevant facts or information about $name related to this scene
-    3. Engaging language suitable for a video narration
-    
-    The tone should be $tone and the language should be suitable for $audience.
-    {component:closing}
-  max_length: 1500
+    Remember to keep the content engaging, factual, and suitable for the target audience: {generalOptions_targetAudience}.
 
 image_generation:
   template: |
-    Create a detailed visual description for an image of $name with the following specifications:
-    - Style: $image_style
-    - Scene: $scene_description
-    - Key elements to include: $key_elements
+    Create a detailed visual description for an image related to {videoSubject} with the following specifications:
+    - Style: {visualPromptOptions_style}
+    - Visual description: {visualPromptOptions_pictureDescription}
+    - Image details: {visualPromptOptions_imageDetails}
+    - Shot details: {visualPromptOptions_shotDetails}
 
     The description should be suitable for an AI image generation tool.
     Focus on visual details, composition, lighting, and atmosphere.
-  max_length: 1000
+
+music_generation:
+  template: |
+    Create {generalOptions_style} music for a video about {videoSubject}.
+    The music should match the following characteristics:
+    - Tone: {generalOptions_tone}
+    - Target audience: {generalOptions_targetAudience}
+    - Content pacing: {contentOptions_pacing}
+
+    The music should enhance the video's theme and mood without overpowering the narration.

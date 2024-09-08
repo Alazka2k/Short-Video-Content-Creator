@@ -1,13 +1,17 @@
+#backend/src/content_pipeline.py
+
 import logging
-from prisma import Prisma
-from .services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
+from backend.src.prisma_client import init_prisma
+from backend.src.services import generate_content_with_openai, generate_image, generate_voice, generate_music, generate_video
 from shared.types.ContentCreation import ContentCreationRequest, VideoContent
 from typing import Dict, Any, List
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .progress_tracker import ProgressTracker
+from backend.src.progress_tracker import ProgressTracker
+from backend.src.prompt_generator import PromptGenerator
+import os
 
-prisma = Prisma()
+prisma = init_prisma()
 
 class ContentCreationPipeline:
     def __init__(self, template_file: str):
@@ -138,7 +142,10 @@ class ContentCreationPipeline:
             self.logger.error(f"Error saving to database: {str(e)}", exc_info=True)
             raise
 
-content_pipeline = ContentCreationPipeline("prompt_templates.yaml")
+current_dir = os.path.dirname(os.path.abspath(__file__))
+template_path = os.path.join(current_dir, "prompt_templates.yaml")
+
+content_pipeline = ContentCreationPipeline(template_path)
 
 async def content_creation_worker(input_data: List[ContentCreationRequest]) -> List[Dict[str, Any]]:
     logger = logging.getLogger(__name__)

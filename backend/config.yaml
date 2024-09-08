@@ -1,4 +1,4 @@
-# config.yaml
+# backend/src/config.yaml
 
 # API Endpoints
 api:
@@ -7,6 +7,10 @@ api:
   elevenlabs: "https://api.elevenlabs.io/v1/text-to-speech"
   luma_ai: "https://api.lumalabs.ai/v1/images/generations"
   suna_ai: "https://api.suno.ai/v1/generations"
+
+# OpenAI Model Configuration
+openai:
+  model: "gpt-4o-2024-08-06"  # or the model you want to use
 
 # Default Content Generation Parameters
 content_generation:
