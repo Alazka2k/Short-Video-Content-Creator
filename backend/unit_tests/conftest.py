@@ -5,6 +5,7 @@ import os
 import pytest
 import asyncio
 from dotenv import load_dotenv
+import logging
 
 # Get the absolute path to the project root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -27,6 +28,10 @@ from backend.src.config import load_config
 from backend.src.prisma_client import init_prisma, disconnect_prisma
 from backend.src.models import VideoContent, Scene
 
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
@@ -39,9 +44,13 @@ def config():
 
 @pytest.fixture(scope="session")
 async def prisma_client():
+    logger.debug("Initializing Prisma client")
     prisma = await init_prisma()
+    logger.debug("Prisma client initialized")
     yield prisma
+    logger.debug("Disconnecting Prisma client")
     await disconnect_prisma()
+    logger.debug("Prisma client disconnected")
 
 @pytest.fixture
 def sample_video_content():
