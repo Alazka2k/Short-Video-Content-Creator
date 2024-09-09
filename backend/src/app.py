@@ -9,6 +9,7 @@ import yaml
 import logging
 from backend.src.config import load_config
 from backend.src.prisma_client import get_prisma
+import asyncio
 
 def create_app():
     app = Flask(__name__)
@@ -21,18 +22,19 @@ def create_app():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    prisma = get_prisma()
-    if prisma is None:
-        raise Exception("Failed to initialize Prisma")
+    prisma = None
 
     @app.before_request
     async def before_request():
-        await prisma.connect()
+        nonlocal prisma
+        if prisma is None:
+            prisma = await get_prisma()
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):
+        loop = asyncio.get_event_loop()
         if prisma:
-            prisma.disconnect()
+            loop.run_until_complete(prisma.disconnect())
 
     @app.route('/api/create-content', methods=['POST'])
     async def create_content_endpoint():

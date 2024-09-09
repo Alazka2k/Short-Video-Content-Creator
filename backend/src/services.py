@@ -11,7 +11,7 @@ from backend.src.models import VideoContent, Scene
 from backend.src.config import load_config
 from dataclasses import dataclass
 
-# Laden Sie die .env-Datei aus dem Hauptverzeichnis
+# Load the .env file from the main directory
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
 load_dotenv(dotenv_path)
 
@@ -25,22 +25,13 @@ if not OPENAI_API_KEY:
 client = OpenAI()
 config = load_config()
 
-class Scene(BaseModel):
-    scene_description: str
-    visual_prompt: str
-
-class VideoContent(BaseModel):
-    video_title: str
-    description: str
-    main_scenes: List[Scene]
-
 class OpenAIService:
     def __init__(self, api_key):
         self.client = OpenAI(api_key=api_key)
 
-    def generate_content(self, prompt: str) -> Dict[str, Any]:
-        response = self.client.chat.completions.create(
-            model="gpt-4o-2024-08-06",  # Verwenden Sie ein verfügbares Modell
+    async def generate_content(self, prompt: str) -> Dict[str, Any]:
+        response = await self.client.chat.completions.create(
+            model="gpt-4o-2024-08-06",  # Use an available model
             messages=[
                 {"role": "system", "content": "You are a creative video content creator. Please provide your response in JSON format."},
                 {"role": "user", "content": f"{prompt}\n\nPlease format your response as a JSON object."}
@@ -56,10 +47,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Initialize the OpenAI service
 openai_service = OpenAIService(api_key=OPENAI_API_KEY)
 
-def generate_content_with_openai(prompt: str) -> VideoContent:
+async def generate_content_with_openai(prompt: str) -> VideoContent:
     try:
-        response = client.chat.completions.create(
-            model=config['openai']['model'],  # Verwendet das Modell aus der config.yaml
+        response = await client.chat.completions.create(
+            model=config['openai']['model'],  # Uses the model from config.yaml
             messages=[
                 {"role": "system", "content": "You are a creative content generator for short videos."},
                 {"role": "user", "content": prompt}
@@ -76,21 +67,21 @@ def generate_content_with_openai(prompt: str) -> VideoContent:
         raise Exception(f"Error in OpenAI API call: {str(e)}")
 
 # Mock implementations for new services
-def generate_image(prompt: str) -> str:
+async def generate_image(prompt: str) -> str:
     logging.info(f"Generating image with prompt: {prompt[:50]}...")
     return "http://example.com/generated_image.jpg"
 
-def generate_voice(script: str) -> str:
+async def generate_voice(script: str) -> str:
     logging.info(f"Generating voice for script: {script[:50]}...")
     return "http://example.com/generated_voice.mp3"
 
-def generate_music(prompt: str) -> str:
+async def generate_music(prompt: str) -> str:
     logging.info(f"Generating music with prompt: {prompt[:50]}...")
     return "http://example.com/generated_music.mp3"
 
-def generate_video(video_data: Dict[str, Any]) -> str:
+async def generate_video(video_data: Dict[str, Any]) -> str:
     logging.info(f"Generating video with data: {str(video_data)[:100]}...")
     return "http://example.com/generated_video.mp4"
 
 # Ensure all functions are available when imported
-__all__ = ['generate_content_with_openai', 'VideoScript', 'Scene', 'load_config']
+__all__ = ['generate_content_with_openai', 'generate_image', 'generate_voice', 'generate_music', 'generate_video', 'OpenAIService', 'Scene', 'VideoContent', 'load_config']
